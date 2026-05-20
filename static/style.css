@@ -67,6 +67,28 @@ body{
     left:-100px;
 }
 
+.orb3{
+
+    width:400px;
+    height:400px;
+
+    background:#7c3aed;
+
+    top:-120px;
+    right:-100px;
+}
+
+.orb4{
+
+    width:350px;
+    height:350px;
+
+    background:#5c6fff;
+
+    bottom:-120px;
+    left:-100px;
+}
+
 /*PAGE*/
 .page{
 
