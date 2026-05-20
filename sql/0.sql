@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS account_username_idx ON account (username);
+CREATE INDEX IF NOT EXISTS users_username_idx ON users (username);
 
 -- Table for all messages including sender and receiver ids
 CREATE TABLE IF NOT EXISTS messages (
