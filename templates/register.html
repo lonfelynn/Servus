@@ -6,7 +6,6 @@
   <title>Registrieren – Messenger</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
-
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
@@ -20,7 +19,6 @@
 </div>
 
 <div class="page">
-
   <div class="panel">
 
     <div class="logo">
@@ -35,29 +33,70 @@
       <a href="/login">Anmelden</a>
     </p>
 
-    <form action="/register" method="POST">
+    <!-- Fehlermeldung (versteckt bis ein Fehler kommt) -->
+    <div id="error-msg" class="error-msg hidden"></div>
 
+    <form id="register-form">
       <label>Benutzername</label>
       <input type="text"
-             name="username"
+             id="username"
              placeholder="dein_name"
              required>
 
       <label>Passwort</label>
       <input type="password"
-             name="password"
+             id="password"
              placeholder="••••••••"
              required>
 
-      <button type="submit">
+      <label>Passwort bestätigen</label>
+      <input type="password"
+             id="confirm_password"
+             placeholder="••••••••"
+             required>
+
+      <button type="submit" id="submit-btn">
         Konto erstellen
       </button>
-
     </form>
 
   </div>
-
 </div>
+
+<script>
+  const form      = document.getElementById("register-form");
+  const errorMsg  = document.getElementById("error-msg");
+  const submitBtn = document.getElementById("submit-btn");
+
+  form.addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Wird geladen...";
+    errorMsg.classList.add("hidden");
+
+    const username         = document.getElementById("username").value;
+    const password         = document.getElementById("password").value;
+    const confirm_password = document.getElementById("confirm_password").value;
+
+    const response = await fetch("/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, confirm_password })
+    });
+
+    const data = await response.json();
+
+    if (data.ok) {
+      window.location.href = data.redirect;
+    } else {
+      errorMsg.textContent = data.error;
+      errorMsg.classList.remove("hidden");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Konto erstellen";
+    }
+  });
+</script>
 
 </body>
 </html>
