@@ -1,0 +1,4 @@
+.env
+messenger.db
+__pycache__/
+venv/
