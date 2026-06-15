@@ -1,1 +1,71 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Servus Messenger</title>
 
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+</head>
+
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo-icon">💬</div>
+      <div class="logo-text">Servus</div>
+    </div>
+
+    <div class="me-bar">
+      <div class="avatar" id="me-avatar"></div>
+      <div class="me-info">
+        <div class="me-name" id="me-name"></div>
+        <div class="me-level" id="me-level">Level 1</div>
+      </div>
+      <button class="icon-btn" id="logout-btn" title="Abmelden">⎋</button>
+    </div>
+
+    <div class="list-title">Kontakte</div>
+    <div class="user-list" id="user-list">
+      <div class="empty-list">Lade Kontakte…</div>
+    </div>
+  </aside>
+
+  <!-- Chat -->
+  <main class="chat">
+    <div id="chat-placeholder" class="placeholder">
+      <div class="big">💬</div>
+      <p>Wähle links einen Kontakt aus, um zu chatten.</p>
+    </div>
+
+    <div id="chat-view" class="chat hidden" style="min-width:0;">
+      <div class="chat-header">
+        <div class="avatar" id="peer-avatar"></div>
+        <div class="chat-header-name" id="peer-name"></div>
+      </div>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="input-area">
+        <div class="input-row">
+          <textarea class="input-field" id="msg-input" rows="1"
+                    placeholder="Nachricht schreiben…" maxlength="2000"></textarea>
+          <button class="send-btn" id="send-btn" title="Senden">➤</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<!-- Server-Werte für das Script bereitstellen -->
+<script>
+  window.SERVUS = { me: {{ user_id }}, myName: {{ username | tojson }} };
+</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>
