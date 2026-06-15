@@ -2,6 +2,8 @@
 
 Ein bayerisches Schulprojekt. Endlich ein Messenger von Schülern für Schüler.
 
+https://servus.klappstuhl.me
+
 ## Funktionen (Basis)
 
 - Registrierung / Login / Logout (Passwörter mit bcrypt gehasht)
