@@ -1,59 +1,62 @@
 # Servus
 
-A bavarian school project. Finally a messenger made by students for students.
+Ein bayerisches Schulprojekt. Endlich ein Messenger von Schülern für Schüler.
 
-## Features (base layer)
+## Funktionen (Basis)
 
-- Registration / login / logout (passwords hashed with bcrypt)
-- Contact list of all registered users
-- 1-on-1 chat with real-time messages via Socket.IO
-- Message history stored in PostgreSQL
-- Simple XP / level system (you gain XP for every message you send)
+- Registrierung / Login / Logout (Passwörter mit bcrypt gehasht)
+- Kontaktliste aller registrierten Nutzer
+- 1-zu-1-Chat mit Echtzeit-Nachrichten über Socket.IO
+- Nachrichtenverlauf in PostgreSQL gespeichert
+- Einfaches XP-/Level-System (XP für jede gesendete Nachricht)
 
-The whole interface is in German.
+Die gesamte Oberfläche ist auf Deutsch.
 
-## Setup
+## Einrichtung
 
-Dependencies are managed with [Poetry](https://python-poetry.org/).
+Die Abhängigkeiten werden mit [Poetry](https://python-poetry.org/) verwaltet.
 
-1. **Install the dependencies**
+1. **Abhängigkeiten installieren**
 
    ```bash
    poetry install
    ```
 
-2. **Set up PostgreSQL**
+2. **PostgreSQL einrichten**
 
-   Make sure a PostgreSQL server is running and create an empty database, e.g.:
+   Stelle sicher, dass ein PostgreSQL-Server läuft, und lege eine leere
+   Datenbank an, z. B.:
 
    ```sql
-   CREATE ROLE servus WITH LOGIN PASSWORD 'your_password';
+   CREATE ROLE servus WITH LOGIN PASSWORD 'dein_passwort';
    CREATE DATABASE servus OWNER servus;
    ```
 
-3. **Configure environment variables**
+3. **Umgebungsvariablen konfigurieren**
 
-   Copy `.env.example` to `.env` and fill in your database credentials:
+   Kopiere `.env.example` nach `.env` und trage deine Datenbank-Zugangsdaten ein:
 
    ```bash
    cp .env.example .env
    ```
 
-4. **Run the app**
+4. **App starten**
 
    ```bash
    poetry run python app.py
    ```
 
-   On start the app opens a connection pool and runs the database
-   migrations (`sql/*.sql`) automatically, so the tables are created on
-   first launch. Open <http://localhost:5000> in your browser.
+   Beim Start öffnet die App einen Connection-Pool und führt die
+   Datenbank-Migrationen (`sql/*.sql`) automatisch aus, sodass die Tabellen
+   beim ersten Start angelegt werden. Öffne anschließend
+   <http://localhost:5000> im Browser.
 
-## Database
+## Datenbank
 
-- **Connection pool** – the whole app shares one `ThreadedConnectionPool`
-  (see `database.py`). Use it via the context manager, which borrows a
-  connection and returns it to the pool automatically:
+- **Connection-Pool** – die gesamte App teilt sich einen
+  `ThreadedConnectionPool` (siehe `database.py`). Nutze ihn über den
+  Context-Manager, der eine Verbindung ausleiht und automatisch wieder an den
+  Pool zurückgibt:
 
   ```python
   from database import get_connection
@@ -64,25 +67,26 @@ Dependencies are managed with [Poetry](https://python-poetry.org/).
       rows = cursor.fetchall()
   ```
 
-- **Migrations** – every `*.sql` file in the `sql/` folder is applied once,
-  in filename order, and recorded in the `schema_migrations` table. To add a
-  schema change, drop a new file next to the existing one (e.g. `sql/1.sql`)
-  and restart the app — only new files are executed.
+- **Migrationen** – jede `*.sql`-Datei im Ordner `sql/` wird genau einmal
+  ausgeführt, in alphabetischer Reihenfolge, und in der Tabelle
+  `schema_migrations` vermerkt. Für eine Schema-Änderung legst du einfach eine
+  neue Datei daneben (z. B. `sql/1.sql`) und startest die App neu – nur neue
+  Dateien werden ausgeführt.
 
-## Testing the chat
+## Chat testen
 
-Register two accounts (open a second browser or a private window for the
-second user), then select the other user from the contact list and send
-messages back and forth — they appear in real time.
+Registriere zwei Konten (öffne für den zweiten Nutzer einen zweiten Browser
+oder ein privates Fenster), wähle dann in der Kontaktliste den anderen Nutzer
+aus und schicke Nachrichten hin und her – sie erscheinen in Echtzeit.
 
-## Project structure
+## Projektstruktur
 
-| File / folder        | Purpose                                             |
-| -------------------- | --------------------------------------------------- |
-| `app.py`             | Flask app, routes, JSON API and Socket.IO handlers  |
-| `auth.py`            | Registration / login / logout blueprint             |
-| `models.py`          | Database access (users, messages, XP)               |
-| `database.py`        | PostgreSQL connection + table creation              |
-| `templates/`         | `login.html`, `register.html`, `chat.html`          |
-| `static/css/`        | Stylesheets (`style.css` for auth, `chat.css`)      |
-| `static/js/`         | Page scripts (`login.js`, `register.js`, `chat.js`) |
+| Datei / Ordner       | Zweck                                                  |
+| -------------------- | ------------------------------------------------------ |
+| `app.py`             | Flask-App, Routen, JSON-API und Socket.IO-Handler      |
+| `auth.py`            | Blueprint für Registrierung / Login / Logout           |
+| `models.py`          | Datenbankzugriff (Nutzer, Nachrichten, XP)             |
+| `database.py`        | PostgreSQL-Connection-Pool und Migrationen             |
+| `templates/`         | `login.html`, `register.html`, `chat.html`             |
+| `static/css/`        | Stylesheets (`style.css` für Auth, `chat.css`)         |
+| `static/js/`         | Seiten-Skripte (`login.js`, `register.js`, `chat.js`)  |
