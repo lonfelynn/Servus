@@ -9,6 +9,7 @@
   --muted: #6b7080;
   --input: #1a1d27;
   --radius: 16px;
+  --sidebar-width: 320px;
 }
 
 body {
@@ -16,19 +17,25 @@ body {
   color: var(--text);
   font-family: 'DM Sans', sans-serif;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height für Mobile (verhindert Sprung durch Browser-Leiste) */
   overflow: hidden;
 }
 
-.app { display: flex; height: 100vh; }
+.app {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+}
 
 /* ─── Sidebar ─── */
 .sidebar {
-  width: 320px;
+  width: var(--sidebar-width);
   background: var(--panel);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition: transform .25s ease;
 }
 
 .sidebar-top {
@@ -85,6 +92,8 @@ body {
   cursor: pointer;
   font-size: 15px;
   transition: .15s;
+  flex-shrink: 0;
+  touch-action: manipulation;
 }
 .icon-btn:hover { color: var(--text); border-color: var(--accent); }
 
@@ -120,6 +129,21 @@ body {
 
 .empty-list { padding: 20px; color: var(--muted); font-size: 14px; }
 
+* ─── Back-Button (nur Mobile sichtbar) ─── */
+.back-btn {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 18px;
+  align-items: center; justify-content: center;
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+
 /* ─── Chat area ─── */
 .chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
@@ -129,7 +153,7 @@ body {
   border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
-.chat-header-name { font-weight: 600; font-size: 16px; }
+.chat-header-name { font-weight: 600; font-size: 16px; flex: 1; min-width: 0; }
 
 .messages {
   flex: 1;
@@ -177,6 +201,8 @@ body {
   flex-direction: column;
   gap: 12px;
   color: var(--muted);
+  text-align: center;
+  padding: 24px;
 }
 .placeholder .big { font-size: 48px; }
 
@@ -217,11 +243,80 @@ body {
   font-size: 17px;
   flex-shrink: 0;
   transition: .2s;
+  touch-action: manipulation;
 }
 .send-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(92, 111, 255, .3); }
+.send-btn:active { transform: translateY(0); }
 .send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .hidden { display: none !important; }
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #2a2f3d; border-radius: 99px; }
+
+/* ─── Responsive: Tablet (≤ 768px) ─── */
+@media (max-width: 768px) {
+  :root { --sidebar-width: 280px; }
+
+  .messages { padding: 16px; }
+  .chat-header { padding: 14px 16px; }
+  .input-area { padding: 12px 16px; }
+
+  .row { max-width: 80%; }
+}
+
+/* ─── Responsive: Mobile (≤ 600px) ─── */
+/*
+  Auf Mobile wird der Chat wie eine native App:
+  Entweder Sidebar (Kontaktliste) ODER Chat sichtbar — nicht beide gleichzeitig.
+  Die Sidebar überdeckt den ganzen Screen, Chat auch.
+  Ein Back-Button im Chat-Header bringt zurück zur Kontaktliste.
+*/
+@media (max-width: 600px) {
+  .app {
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Sidebar nimmt volle Breite ein */
+  .sidebar {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    z-index: 10;
+    transform: translateX(0);
+  }
+
+  /* Sidebar ausgeblendet wenn ein Chat offen ist */
+  .sidebar.slide-out {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+
+  /* Chat nimmt volle Breite ein */
+  .chat {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    transform: translateX(100%);
+    transition: transform .25s ease;
+  }
+
+  /* Chat eingeblendet wenn aktiv */
+  .chat.slide-in {
+    transform: translateX(0);
+  }
+
+  /* Back-Button im Chat-Header anzeigen */
+  .back-btn { display: flex; }
+
+  /* Nachrichten breiter auf kleinem Screen */
+  .row { max-width: 88%; }
+
+  .messages { padding: 12px; gap: 8px; }
+  .chat-header { padding: 12px 16px; }
+  .input-area { padding: 10px 12px; }
+
+  /* Placeholder-Text anpassen */
+  .placeholder .big { font-size: 36px; }
+}
