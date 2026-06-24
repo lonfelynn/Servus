@@ -117,3 +117,63 @@ def add_message_xp(user_id: int):
             (new_level, user_id)
         )
         return {"xp": new_xp, "level": new_level}
+
+# ── Notifications ──────────────────────────────────────────
+def create_notification(recipient_id: int, sender_id: int, message_id: int):
+    """Creates a notification for a new incoming message.
+    Returns the created row including id and created_at.
+    """
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO notifications (recipient_id, sender_id, message_id) "
+            "VALUES (%s, %s, %s) "
+            "RETURNING id, recipient_id, sender_id, message_id, is_read, created_at",
+            (recipient_id, sender_id, message_id)
+        )
+        return cursor.fetchone()
+
+
+def get_unread_notifications(user_id: int):
+    """Returns all unread notifications for a user, newest first.
+    Joins with users so the sender's username is included in each row.
+    """
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT n.id, n.sender_id, n.message_id, n.created_at,
+                   u.username AS sender_name
+            FROM   notifications n
+            JOIN   users u ON u.id = n.sender_id
+            WHERE  n.recipient_id = %s AND n.is_read = FALSE
+            ORDER  BY n.created_at DESC
+            """,
+            (user_id,)
+        )
+        return cursor.fetchall()
+
+
+def mark_notifications_read_by_sender(recipient_id: int, sender_id: int):
+    """Marks all unread notifications from a specific sender as read.
+    The recipient_id check ensures users can only mark their own notifications.
+    """
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE notifications "
+            "SET    is_read = TRUE "
+            "WHERE  recipient_id = %s AND sender_id = %s AND is_read = FALSE",
+            (recipient_id, sender_id)
+        )
+
+
+def mark_all_notifications_read(user_id: int):
+    """Marks every unread notification for the given user as read."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE notifications SET is_read = TRUE "
+            "WHERE  recipient_id = %s AND is_read = FALSE",
+            (user_id,)
+        )
