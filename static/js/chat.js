@@ -33,9 +33,16 @@ async function loadUsers() {
   const users = await res.json();
 
   if (users.length === 0) {
-    userListEl.innerHTML =
-      '<div class="empty-list">Noch keine anderen Nutzer. ' +
-      'Registriere einen zweiten Account zum Testen.</div>';
+    userListEl.innerHTML = users.map(u => `
+  <div class="user-item" data-id="${u.id}" data-name="${escapeHtml(u.username)}">
+    <div class="avatar">${escapeHtml(u.username.charAt(0))}</div>
+    <div class="user-info">
+      <div class="user-name">${escapeHtml(u.username)}</div>
+      <div class="user-sub">Level ${u.level}</div>
+    </div>
+    <div class="notif-badge hidden" id="badge-${u.id}"></div>
+  </div>
+`).join("");
     return;
   }
 
@@ -76,6 +83,7 @@ async function selectPeer(peerId, peerName, itemEl) {
   messages.forEach(renderMessage);
   scrollToBottom();
   msgInput.focus();
+  markNotificationsRead(peerId);
 }
 
 // ── Eine Nachricht rendern ────────────────────────────────
@@ -151,6 +159,94 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;");
 }
 
+// ════════════════════════════════════════════════════════════
+// ── Benachrichtigungssystem ───────────────────────────────
+// ════════════════════════════════════════════════════════════
+
+// sender_id → Anzahl ungelesener Benachrichtigungen
+const unreadCounts = {};
+
+async function loadNotifications() {
+  try {
+    const res = await fetch("/api/notifications");
+    if (!res.ok) return;
+    const notifs = await res.json();
+
+    notifs.forEach(n => {
+      unreadCounts[n.sender_id] = (unreadCounts[n.sender_id] || 0) + 1;
+    });
+
+    Object.entries(unreadCounts).forEach(([id, count]) => {
+      updateUserBadge(Number(id), count);
+    });
+
+    updateContactsTitle();
+  } catch (_) {
+    // Benachrichtigungen sind nicht kritisch — stummes Fehlschlagen
+  }
+}
+
+function updateUserBadge(senderId, count) {
+  const badge = document.getElementById(`badge-${senderId}`);
+  if (!badge) return;
+
+  if (count > 0) {
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+
+  updateContactsTitle();
+}
+
+function updateContactsTitle() {
+  const total = Object.values(unreadCounts).reduce((sum, n) => sum + n, 0);
+  const titleEl = document.querySelector(".list-title");
+  if (titleEl) {
+    titleEl.textContent = total > 0 ? `Kontakte (${total})` : "Kontakte";
+  }
+}
+
+async function markNotificationsRead(peerId) {
+  if (!unreadCounts[peerId]) return;
+
+  try {
+    await fetch(`/api/notifications/read-by-sender/${peerId}`, { method: "POST" });
+  } catch (_) {
+    // Stummes Fehlschlagen — Badge wird trotzdem lokal entfernt
+  }
+
+  delete unreadCounts[peerId];
+  updateUserBadge(peerId, 0);
+}
+
+function flashUserItem(senderId) {
+  const item = document.querySelector(`.user-item[data-id="${senderId}"]`);
+  if (!item) return;
+  item.classList.add("notif-flash");
+  setTimeout(() => item.classList.remove("notif-flash"), 600);
+}
+
+socket.on("notification", (notif) => {
+  if (notif.sender_id === activePeerId) {
+    // Chat mit Absender ist offen → sofort als gelesen markieren
+    markNotificationsRead(notif.sender_id);
+  } else {
+    // Chat geschlossen → Badge erhöhen + Item aufleuchten lassen
+    unreadCounts[notif.sender_id] = (unreadCounts[notif.sender_id] || 0) + 1;
+    updateUserBadge(notif.sender_id, unreadCounts[notif.sender_id]);
+    flashUserItem(notif.sender_id);
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────
-loadMe();
-loadUsers();
+// loadUsers() muss awaited werden, damit die Badge-Elemente im DOM
+// existieren, bevor loadNotifications() sie befüllt.
+async function init() {
+  loadMe();
+  await loadUsers();
+  loadNotifications();
+}
+
+init();
