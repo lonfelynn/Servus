@@ -33,6 +33,7 @@ body{
     inset:0;
 
     overflow:hidden;
+    pointer-events: none;
 }
 
 .orb{
@@ -89,7 +90,7 @@ body{
     left:-100px;
 }
 
-/*PAGE*/
+/* ─── Page Layout ─── */
 .page{
 
     display:flex;
@@ -100,23 +101,20 @@ body{
 
     position:relative;
     z-index:1;
+    padding: 24px 16px;
 }
 
-/* PANEL */
+/* ─── Panel ─── */
 
 .panel{
 
-    width:420px;
-
-    background:rgba(19,22,30,.9);
-
-    border:1px solid var(--border);
-
-    border-radius:24px;
-
-    padding:50px;
-
-    backdrop-filter:blur(20px);
+    width: 100%;
+    max-width: 420px;
+    background: rgba(19, 22, 30, .9);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 50px;
+    backdrop-filter: blur(20px);
 }
 
 /* LOGO */
@@ -145,6 +143,7 @@ body{
     justify-content:center;
 
     font-size:20px;
+    flex-shrink: 0;
 }
 
 .logo-text{
@@ -155,7 +154,7 @@ body{
     font-weight:800;
 }
 
-/*TEXT*/
+/* ─── Text ─── */
 h1{
 
     font-family:'Syne',sans-serif;
@@ -179,7 +178,7 @@ h1{
     text-decoration:none;
 }
 
-/*FORM*/
+/* ─── Form ─── */
 form{
 
     display:flex;
@@ -188,33 +187,26 @@ form{
 
 label{
 
-    font-size:13px;
-
-    margin-bottom:8px;
-    margin-top:18px;
-
-    color:var(--muted);
-
-    text-transform:uppercase;
+    font-size: 13px;
+    margin-bottom: 8px;
+    margin-top: 18px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
 }
 
 input{
 
-    background:var(--input);
-
-    border:1.5px solid var(--border);
-
-    padding:14px;
-
-    border-radius:14px;
-
-    color:white;
-
-    outline:none;
-
-    font-size:15px;
-
-    transition:.2s;
+    background: var(--input);
+  border: 1.5px solid var(--border);
+  padding: 14px;
+  border-radius: 14px;
+  color: white;
+  outline: none;
+  font-size: 15px;
+  font-family: inherit;
+  transition: .2s;
+  width: 100%;
 }
 
 input:focus{
@@ -226,30 +218,63 @@ input:focus{
 
 button{
 
-    margin-top:35px;
-
-    padding:15px;
-
-    border:none;
-
-    border-radius:14px;
-
-    background:var(--accent);
-
-    color:white;
-
-    font-family:'Syne',sans-serif;
-    font-size:15px;
-    font-weight:700;
-
-    cursor:pointer;
-
-    transition:.2s;
+    margin-top: 35px;
+  padding: 15px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent);
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .2s;
+  width: 100%;
+  touch-action: manipulation;
 }
 
-button:hover{
+button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(92, 111, 255, .3); }
+button:active { transform: translateY(0); }
 
-    transform:translateY(-2px);
+/* ─── Error message ─── */
+.error-msg {
+  background: rgba(255, 80, 80, .12);
+  border: 1px solid rgba(255, 80, 80, .3);
+  color: #ff6b6b;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
 
-    box-shadow:0 10px 30px rgba(92,111,255,.3);
+.hidden { display: none !important; }
+
+/* ─── Responsive: Tablet ─── */
+@media (max-width: 520px) {
+  .panel {
+    padding: 36px 28px;
+    border-radius: 20px;
+  }
+
+  h1 { font-size: 26px; }
+  .logo-text { font-size: 20px; }
+}
+
+/* ─── Responsive: Mobile ─── */
+@media (max-width: 380px) {
+  .panel {
+    padding: 28px 20px;
+    border-radius: 16px;
+  }
+
+  h1 { font-size: 22px; }
+
+  .logo { margin-bottom: 28px; }
+  .subtitle { margin-bottom: 24px; }
+
+  button { margin-top: 24px; padding: 14px; }
+
+  /* Orbs kleiner machen damit sie nicht zu viel Platz wegnehmen */
+  .orb1, .orb3 { width: 200px; height: 200px; }
+  .orb2, .orb4 { width: 180px; height: 180px; }
 }
