@@ -67,5 +67,40 @@
 </script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+  
+<!-- Mobile Navigation: Sidebar ↔ Chat wechseln -->
+<script>
+  const isMobile = () => window.innerWidth <= 600;
+  const sidebar  = document.getElementById('sidebar');
+  const chatMain = document.getElementById('chat-main');
+
+  // Wird aufgerufen wenn ein Kontakt ausgewählt wird (von chat.js aus aufrufen oder Event dispatchen)
+  function showChatMobile() {
+    if (!isMobile()) return;
+    sidebar.classList.add('slide-out');
+    chatMain.classList.add('slide-in');
+  }
+
+  // Back-Button → zurück zur Sidebar
+  document.getElementById('back-btn').addEventListener('click', () => {
+    sidebar.classList.remove('slide-out');
+    chatMain.classList.remove('slide-in');
+  });
+
+  // Kontaktklick löst Mobile-Navigation aus
+  document.getElementById('user-list').addEventListener('click', (e) => {
+    const item = e.target.closest('.user-item');
+    if (item) showChatMobile();
+  });
+
+  // Bei Fenstergröße-Änderung Klassen zurücksetzen
+  window.addEventListener('resize', () => {
+    if (!isMobile()) {
+      sidebar.classList.remove('slide-out');
+      chatMain.classList.remove('slide-in');
+    }
+  });
+</script>
+
 </body>
 </html>
