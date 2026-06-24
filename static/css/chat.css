@@ -319,4 +319,42 @@ body {
 
   /* Placeholder-Text anpassen */
   .placeholder .big { font-size: 36px; }
+  /* ─── Notification badges (neue Nachrichten-Zähler) ─── */
+
+.notif-badge {
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  padding: 0 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: badge-pop .2s ease both;
+}
+
+@keyframes badge-pop {
+  from { transform: scale(.4); opacity: 0; }
+  to   { transform: scale(1);  opacity: 1; }
+}
+
+/* Kurzes Aufleuchten des User-Items bei neuer Nachricht */
+.notif-flash {
+  animation: notif-pulse .55s ease;
+}
+
+@keyframes notif-pulse {
+  0%   { background: transparent; }
+  40%  { background: rgba(92, 111, 255, .18); }
+  100% { background: transparent; }
+}
+
+/* Aktives Item behält seinen Stil trotz Flash */
+.user-item.active.notif-flash {
+  background: rgba(92, 111, 255, .15);
+}
 }
