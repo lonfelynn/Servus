@@ -12,6 +12,10 @@ from models import (
     get_conversation,
     save_message,
     add_message_xp,
+    create_notification,
+    get_unread_notifications,
+    mark_notifications_read_by_sender,
+    mark_all_notifications_read,
 )
 
 # ── App setup ───────────────────────────────────────────────
@@ -45,6 +49,15 @@ def message_to_dict(message):
         "sent_at": message["sent_at"].isoformat(),
     }
 
+def notification_to_dict(notif):
+    """Turns a notification row into a JSON-serializable dict."""
+    return {
+        "id": notif["id"],
+        "sender_id": notif["sender_id"],
+        "sender_name": notif["sender_name"],
+        "message_id": notif["message_id"],
+        "created_at": notif["created_at"].isoformat(),
+    }
 
 # ── Pages ───────────────────────────────────────────────────
 @app.route("/")
@@ -91,6 +104,31 @@ def api_messages(other_id):
     messages = get_conversation(session["user_id"], other_id)
     return jsonify([message_to_dict(m) for m in messages])
 
+# ── Notification API ────────────────────────────────────────
+@app.route("/api/notifications")
+@login_required
+def api_notifications():
+    """Returns all unread notifications for the current user."""
+    notifs = get_unread_notifications(session["user_id"])
+    return jsonify([notification_to_dict(n) for n in notifs])
+
+
+@app.route("/api/notifications/read-by-sender/<int:sender_id>", methods=["POST"])
+@login_required
+def api_notifications_read_by_sender(sender_id):
+    """Marks all unread notifications from a specific sender as read.
+    session["user_id"] als recipient_id — Nutzer können nur ihre eigenen löschen.
+    """
+    mark_notifications_read_by_sender(session["user_id"], sender_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/notifications/read-all", methods=["POST"])
+@login_required
+def api_notifications_read_all():
+    """Marks every unread notification for the current user as read."""
+    mark_all_notifications_read(session["user_id"])
+    return jsonify({"ok": True})
 
 # ── Realtime (Socket.IO) ────────────────────────────────────
 @socketio.on("connect")
@@ -123,6 +161,20 @@ def on_send_message(data):
     # Deliver to the receiver and echo back to the sender (all their open tabs).
     emit("new_message", payload, room=f"user_{receiver_id}")
     emit("new_message", payload, room=f"user_{sender_id}")
+
+    if receiver_id != sender_id:
+        try:
+            notif = create_notification(receiver_id, sender_id, message["id"])
+            emit("notification", {
+                "id": notif["id"],
+                "sender_id": sender_id,
+                "sender_name": session.get("username", ""),
+                "message_id": message["id"],
+                "created_at": notif["created_at"].isoformat(),
+            }, room=f"user_{receiver_id}")
+        except Exception:
+            # Notification-Fehler darf Nachrichtenzustellung nie unterbrechen.
+            pass
 
 
 # ── Startup ─────────────────────────────────────────────────
