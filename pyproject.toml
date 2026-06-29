@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "A bavarian school project. Finally a messenger made by students for students."
 authors = ["Servus Team"]
 readme = "README.md"
-requires-python = ">=3.12"
 package-mode = false
 
 [tool.poetry.dependencies]
