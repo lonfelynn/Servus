@@ -184,4 +184,18 @@ atexit.register(close_pool)
 if __name__ == "__main__":
     init_pool()        # create the application-wide connection pool
     run_migrations()   # apply any new sql/*.sql files
-    socketio.run(app, debug=True)
+
+    # Host/port/debug come from the environment so the SAME entrypoint works
+    # for bare `poetry run python app.py` (localhost, debug on by default) and
+    # for Docker (HOST=0.0.0.0 is baked into the image).
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "5000"))
+    debug = os.environ.get("FLASK_DEBUG", "1" if host == "127.0.0.1" else "0").lower() \
+        in ("1", "true", "yes")
+    socketio.run(
+        app,
+        host=host,
+        port=port,
+        debug=debug,
+        allow_unsafe_werkzeug=True,
+    )
