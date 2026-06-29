@@ -1,24 +1,19 @@
-[project]
+[tool.poetry]
 name = "servus"
 version = "0.1.0"
 description = "A bavarian school project. Finally a messenger made by students for students."
-authors = [
-    {name = "Servus Team"}
-]
+authors = ["Servus Team"]
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "flask>=3.0,<4.0",
-    "flask-socketio>=5.3,<6.0",
-    "psycopg2-binary>=2.9,<3.0",
-    "bcrypt>=4.1,<5.0",
-    "python-dotenv>=1.0,<2.0",
-]
-
-[tool.poetry]
-# This is an application, not an installable library.
 package-mode = false
 
+[tool.poetry.dependencies]
+flask = ">=3.0,<4.0"
+flask-socketio = ">=5.3,<6.0"
+psycopg2-binary = ">=2.9,<3.0"
+bcrypt = ">=4.1,<5.0"
+python-dotenv = ">=1.0,<2.0"
+
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
