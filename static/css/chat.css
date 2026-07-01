@@ -544,3 +544,91 @@ body {
   100% { background: transparent; }
 }
 .user-item.active.notif-flash { background: rgba(92, 111, 255, .15); }
+
+/* ─── Nachricht bearbeiten / löschen ─── */
+
+/* Action-Buttons (Stift + X) tauchen bei eigenen Nachrichten beim Hover auf */
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.row.sent:hover .msg-actions { opacity: 1; }
+
+/* Auf Touch-Geräten keine Hover-States → Buttons immer sichtbar */
+@media (hover: none) {
+  .msg-actions { opacity: 1; }
+}
+
+.msg-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: color .12s, background .12s;
+  line-height: 1;
+}
+.msg-btn:hover { color: var(--text); background: var(--input); }
+.msg-delete-btn:hover { color: #ef4444; background: rgba(239, 68, 68, .12); }
+
+/* "(bearbeitet)"-Hinweis unter der Bubble */
+.edited-marker {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* Inline-Edit-Textarea innerhalb der Bubble */
+.edit-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid rgba(255, 255, 255, .45);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  width: 100%;
+  resize: none;
+  outline: none;
+  min-height: 22px;
+  padding: 0;
+}
+
+/* Speichern / Abbrechen innerhalb der Bubble */
+.edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.btn-edit-save {
+  background: rgba(255, 255, 255, .22);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .12s;
+}
+.btn-edit-save:hover { background: rgba(255, 255, 255, .35); }
+.btn-edit-cancel {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, .55);
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color .12s;
+}
+.btn-edit-cancel:hover { color: #fff; }
