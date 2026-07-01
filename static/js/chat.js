@@ -6,8 +6,9 @@ const socket = io();
 
 // Aktueller Chat + Caches
 let activeChatId = null;
-const chatsById = {};   // chat_id → Chat-Objekt (id, display_name, members, is_group)
-let allUsers = [];      // alle anderen Nutzer (für Kontaktliste + Mitglieder-Picker)
+const chatsById = {};    // chat_id → Chat-Objekt (id, display_name, members, is_group)
+let allUsers = [];       // alle anderen Nutzer (für Kontaktliste + Mitglieder-Picker)
+const unreadByChat = {}; // chat_id → Anzahl ungelesener Nachrichten
 
 const userListEl   = document.getElementById("user-list");
 const chatListEl   = document.getElementById("chat-list");
@@ -69,6 +70,7 @@ async function loadChats(selectId = null) {
           <div class="user-name">${escapeHtml(c.display_name)}</div>
           <div class="user-sub">${c.is_group ? c.members.length + " Mitglieder" : "Direktnachricht"}</div>
         </div>
+        <div class="notif-badge hidden" id="badge-${c.id}"></div>
       </div>
     `).join("");
 
@@ -77,6 +79,7 @@ async function loadChats(selectId = null) {
     });
   }
 
+  applyBadges();   // Badge-Elemente wurden neu gerendert → Zähler wieder setzen
   if (selectId !== null && chatsById[selectId]) openChat(selectId);
 }
 
@@ -118,6 +121,7 @@ async function openChat(chatId) {
   scrollToBottom();
   msgInput.focus();
 
+  markChatRead(chatId);
   if (window.showChatMobile) window.showChatMobile();
 }
 
@@ -167,6 +171,14 @@ socket.on("new_message", (msg) => {
   if (msg.chat_id === activeChatId) {
     renderMessage(msg);
     scrollToBottom();
+    // Offener Chat → in DB als gelesen markieren (force, da der lokale Zähler
+    // schon 0 ist, der Server aber trotzdem eine ungelesen-Zeile anlegt).
+    if (msg.sender_id !== ME) markChatRead(msg.chat_id, true);
+  } else if (msg.sender_id !== ME) {
+    // Geschlossener Chat → ungelesen-Zähler erhöhen + Item aufleuchten.
+    unreadByChat[msg.chat_id] = (unreadByChat[msg.chat_id] || 0) + 1;
+    updateChatBadge(msg.chat_id);
+    flashChatItem(msg.chat_id);
   }
   if (msg.sender_id === ME) loadMe();   // XP/Level aktualisieren
 });
@@ -347,11 +359,64 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;");
 }
 
+// ════════════════════════════════════════════════════════════
+// ── Benachrichtigungen (ungelesen-Badges pro Chat) ─────────
+// ════════════════════════════════════════════════════════════
+async function loadNotifications() {
+  try {
+    const res = await fetch("/api/notifications");
+    if (!res.ok) return;
+    const counts = await res.json();   // [{chat_id, count}]
+    counts.forEach(c => { unreadByChat[c.chat_id] = c.count; });
+    applyBadges();
+  } catch (_) {
+    // Benachrichtigungen sind nicht kritisch — stummes Fehlschlagen.
+  }
+}
+
+// Setzt alle Badges gemäß unreadByChat (nach jedem Neu-Rendern der Liste).
+function applyBadges() {
+  Object.keys(chatsById).forEach(id => updateChatBadge(Number(id)));
+}
+
+function updateChatBadge(chatId) {
+  const badge = document.getElementById(`badge-${chatId}`);
+  if (!badge) return;
+  const count = unreadByChat[chatId] || 0;
+  if (count > 0) {
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
+
+function flashChatItem(chatId) {
+  const item = chatListEl.querySelector(`.user-item[data-id="${chatId}"]`);
+  if (!item) return;
+  item.classList.add("notif-flash");
+  setTimeout(() => item.classList.remove("notif-flash"), 600);
+}
+
+async function markChatRead(chatId, force = false) {
+  // Ohne force nur handeln, wenn lokal etwas ungelesen ist (spart Requests).
+  // Mit force (Nachricht im offenen Chat) immer die DB aktualisieren.
+  if (!force && !unreadByChat[chatId]) return;
+  delete unreadByChat[chatId];
+  updateChatBadge(chatId);
+  try {
+    await fetch(`/api/notifications/chat/${chatId}/read`, { method: "POST" });
+  } catch (_) {
+    // Badge wurde lokal bereits entfernt — stummes Fehlschlagen.
+  }
+}
+
 // ── Start ─────────────────────────────────────────────────
 async function init() {
   loadMe();
   await loadUsers();   // muss vor loadChats/Pickern stehen (allUsers befüllen)
   await loadChats();
+  loadNotifications();
 }
 
 init();

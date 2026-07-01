@@ -21,6 +21,9 @@ from models import (
     rename_chat,
     save_chat_message,
     get_chat_conversation,
+    create_chat_notifications,
+    get_unread_chat_counts,
+    mark_chat_notifications_read,
 )
 
 # ── App setup ───────────────────────────────────────────────
@@ -142,6 +145,21 @@ def api_chat_messages(chat_id):
     return jsonify([chat_message_to_dict(m) for m in messages])
 
 
+@app.route("/api/notifications")
+@login_required
+def api_notifications():
+    """Unread message counts per chat for the current user."""
+    return jsonify(get_unread_chat_counts(session["user_id"]))
+
+
+@app.route("/api/notifications/chat/<int:chat_id>/read", methods=["POST"])
+@login_required
+def api_notifications_read(chat_id):
+    """Marks all unread messages in a chat as read for the current user."""
+    mark_chat_notifications_read(session["user_id"], chat_id)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/chats/<int:chat_id>/members", methods=["POST"])
 @login_required
 def api_add_member(chat_id):
@@ -257,8 +275,16 @@ def on_send_message(data):
     add_message_xp(sender_id)
     payload = chat_message_to_dict(message, sender_name=session.get("username", ""))
 
+    # Persist an unread marker for every other member (survives a page reload).
+    try:
+        create_chat_notifications(chat_id, message["id"], sender_id)
+    except Exception:
+        # A notification failure must never block message delivery.
+        pass
+
     # Deliver to everyone in the chat room (the sender is in it too, so their
-    # own open tabs render the message through the same path).
+    # own open tabs render the message through the same path). Clients drive the
+    # live unread badges off this same event, so no separate notify event.
     emit("new_message", payload, room=f"chat_{chat_id}")
 
 

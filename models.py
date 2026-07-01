@@ -390,3 +390,47 @@ def get_chat_conversation(chat_id: int):
             (chat_id,)
         )
         return cursor.fetchall()
+
+
+# ── Chat notifications (unread badges per chat) ─────────────
+def create_chat_notifications(chat_id: int, message_id: int, sender_id: int):
+    """Marks a new message as unread for every chat member except the sender."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            INSERT INTO chat_notifications (recipient_id, chat_id, message_id)
+            SELECT user_id, %s, %s
+            FROM   chat_members
+            WHERE  chat_id = %s AND user_id <> %s
+            """,
+            (chat_id, message_id, chat_id, sender_id)
+        )
+
+
+def get_unread_chat_counts(user_id: int):
+    """Returns [{chat_id, count}] — number of unread messages per chat."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT chat_id, COUNT(*) AS count
+            FROM   chat_notifications
+            WHERE  recipient_id = %s AND is_read = FALSE
+            GROUP  BY chat_id
+            """,
+            (user_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def mark_chat_notifications_read(recipient_id: int, chat_id: int):
+    """Marks every unread message in a chat as read for the given recipient.
+    The recipient_id check ensures users only touch their own notifications."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE chat_notifications SET is_read = TRUE "
+            "WHERE  recipient_id = %s AND chat_id = %s AND is_read = FALSE",
+            (recipient_id, chat_id)
+        )
