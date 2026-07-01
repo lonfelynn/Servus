@@ -380,7 +380,7 @@ def get_chat_conversation(chat_id: int):
         cursor = connection.cursor()
         cursor.execute(
             """
-            SELECT m.id, m.chat_id, m.sender_id, m.content, m.sent_at,
+            SELECT m.id, m.chat_id, m.sender_id, m.content, m.sent_at, m.edited_at,
                    u.username AS sender_name
             FROM   chat_messages m
             JOIN   users u ON u.id = m.sender_id
@@ -434,6 +434,41 @@ def mark_chat_notifications_read(recipient_id: int, chat_id: int):
             "WHERE  recipient_id = %s AND chat_id = %s AND is_read = FALSE",
             (recipient_id, chat_id)
         )
+
+# ── Message editing / deletion ─────────────────────────────
+def update_chat_message(message_id: int, sender_id: int, new_content: str):
+    """Updates the content of a message and records the edit timestamp.
+    Only the original sender may edit their own message.
+    Returns the updated row, or None if no row matched (wrong sender or id).
+    """
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            UPDATE chat_messages
+            SET    content   = %s,
+                   edited_at = NOW()
+            WHERE  id        = %s
+              AND  sender_id = %s
+            RETURNING id, chat_id, sender_id, content, sent_at, edited_at
+            """,
+            (new_content, message_id, sender_id)
+        )
+        return cursor.fetchone()
+
+
+def delete_chat_message(message_id: int, sender_id: int) -> bool:
+    """Deletes a message. Only the original sender may delete their own message.
+    Associated chat_notifications rows are removed automatically via ON DELETE CASCADE.
+    Returns True if a row was deleted, False if no row matched.
+    """
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "DELETE FROM chat_messages WHERE id = %s AND sender_id = %s",
+            (message_id, sender_id)
+        )
+        return cursor.rowcount > 0
 
 
 # ── Friendships & friend requests ──────────────────────────

@@ -124,11 +124,36 @@ function renderMessage(msg) {
 
   const row = document.createElement("div");
   row.className = `row ${mine ? "sent" : "received"}`;
+  // data-Attribute ermöglichen gezielte DOM-Lookups bei edit/delete-Events.
+  row.dataset.id     = msg.id;
+  row.dataset.chatId = msg.chat_id;
+
   row.innerHTML = `
     ${showSender ? `<div class="sender">${escapeHtml(msg.sender_name || "")}</div>` : ""}
     <div class="bubble">${escapeHtml(msg.content)}</div>
+    ${msg.edited_at ? `<div class="edited-marker">(bearbeitet)</div>` : ""}
     <div class="time">${formatTime(msg.sent_at)}</div>
+    ${mine ? `
+    <div class="msg-actions">
+      <button class="msg-btn msg-edit-btn"   title="Bearbeiten">✎</button>
+      <button class="msg-btn msg-delete-btn" title="Löschen">✕</button>
+    </div>` : ""}
   `;
+
+  if (mine) {
+    row.querySelector(".msg-edit-btn").addEventListener("click", () => {
+      // Bereits im Bearbeitungsmodus → nichts tun.
+      if (row.querySelector(".edit-input")) return;
+      // textContent der Bubble ist der unescapte Original-Text.
+      const currentContent = row.querySelector(".bubble").textContent;
+      startEditMessage(msg.id, msg.chat_id, currentContent, row);
+    });
+
+    row.querySelector(".msg-delete-btn").addEventListener("click", () => {
+      deleteMessage(msg.id, msg.chat_id);
+    });
+  }
+
   messagesEl.appendChild(row);
 }
 
@@ -516,6 +541,108 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
+// ════════════════════════════════════════════════════════════
+// ── Nachricht bearbeiten ───────────────────────────────────
+// ════════════════════════════════════════════════════════════
+
+function startEditMessage(msgId, chatId, currentContent, rowEl) {
+  const bubble = rowEl.querySelector(".bubble");
+
+  bubble.innerHTML = `
+    <textarea class="edit-input" maxlength="2000" rows="1"></textarea>
+    <div class="edit-actions">
+      <button class="btn-edit-cancel">Abbrechen</button>
+      <button class="btn-edit-save">Speichern</button>
+    </div>
+  `;
+
+  const textarea = bubble.querySelector(".edit-input");
+  textarea.value = currentContent;
+  textarea.style.height = "auto";
+  textarea.style.height = textarea.scrollHeight + "px";
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  textarea.addEventListener("input", () => {
+    textarea.style.height = "auto";
+    textarea.style.height = textarea.scrollHeight + "px";
+  });
+
+  const cancel = () => {
+    bubble.innerHTML = escapeHtml(currentContent);
+  };
+
+  bubble.querySelector(".btn-edit-cancel").addEventListener("click", cancel);
+
+  const save = () => {
+    const newContent = textarea.value.trim();
+    if (!newContent) return;
+    if (newContent === currentContent) { cancel(); return; }
+    saveEditMessage(msgId, chatId, newContent, rowEl, currentContent);
+  };
+
+  bubble.querySelector(".btn-edit-save").addEventListener("click", save);
+
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+    if (e.key === "Escape") cancel();
+  });
+}
+
+async function saveEditMessage(msgId, chatId, newContent, rowEl, originalContent) {
+  try {
+    const res = await fetch(`/api/chats/${chatId}/messages/${msgId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: newContent }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      rowEl.querySelector(".bubble").innerHTML = escapeHtml(originalContent);
+    }
+    // Erfolgsfall: message_edited-Event vom Server aktualisiert den DOM.
+  } catch (_) {
+    rowEl.querySelector(".bubble").innerHTML = escapeHtml(originalContent);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// ── Nachricht löschen ──────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+
+async function deleteMessage(msgId, chatId) {
+  if (!confirm("Nachricht wirklich löschen?")) return;
+  try {
+    await fetch(`/api/chats/${chatId}/messages/${msgId}`, { method: "DELETE" });
+    // Erfolgsfall: message_deleted-Event vom Server entfernt die Zeile.
+  } catch (_) {
+    // Stummes Fehlschlagen — kein sichtbarer Effekt.
+  }
+}
+
+// ─── Eingehende edit/delete-Events (Echtzeit) ─────────────
+
+socket.on("message_edited", (msg) => {
+  const row = messagesEl.querySelector(`.row[data-id="${msg.id}"]`);
+  if (!row) return;
+
+  row.querySelector(".bubble").innerHTML = escapeHtml(msg.content);
+
+  // "(bearbeitet)"-Marker setzen oder aktualisieren.
+  let marker = row.querySelector(".edited-marker");
+  if (!marker) {
+    marker = document.createElement("div");
+    marker.className = "edited-marker";
+    row.querySelector(".time").insertAdjacentElement("beforebegin", marker);
+  }
+  marker.textContent = "(bearbeitet)";
+});
+
+socket.on("message_deleted", (data) => {
+  const row = messagesEl.querySelector(`.row[data-id="${data.message_id}"]`);
+  if (row) row.remove();
+});
 
 // ════════════════════════════════════════════════════════════
 // ── Benachrichtigungen (ungelesen-Badges pro Chat) ─────────
