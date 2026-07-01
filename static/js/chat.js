@@ -147,8 +147,7 @@ function scrollToBottom() {
 }
 
 function formatTime(iso) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return iso.slice(11, 16);
 }
 
 function escapeHtml(str) {
