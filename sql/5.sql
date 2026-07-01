@@ -1,4 +1,4 @@
--- Revises: V4
+-- Revises: V5
 -- Creation Date: 2026-07-01
 -- Reason: Friendships + friend requests with a single pending intro message
 
