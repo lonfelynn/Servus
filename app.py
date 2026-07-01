@@ -24,6 +24,8 @@ from models import (
     create_chat_notifications,
     get_unread_chat_counts,
     mark_chat_notifications_read,
+    update_chat_message,   
+    delete_chat_message,   
 )
 
 # ── App setup ───────────────────────────────────────────────
@@ -48,7 +50,10 @@ def login_required(view):
 
 
 def chat_message_to_dict(message, sender_name=None):
-    """Turns a chat_messages row into a JSON-serializable dict (datetime → string)."""
+    """Turns a chat_messages row into a JSON-serializable dict (datetime → string).
+    edited_at is None for messages that have never been changed.
+    """
+    edited_at = message.get("edited_at")
     return {
         "id": message["id"],
         "chat_id": message["chat_id"],
@@ -56,8 +61,8 @@ def chat_message_to_dict(message, sender_name=None):
         "sender_name": sender_name if sender_name is not None else message.get("sender_name"),
         "content": message["content"],
         "sent_at": message["sent_at"].isoformat(),
+        "edited_at": edited_at.isoformat() if edited_at else None,  # NEU
     }
-
 
 # ── Pages ───────────────────────────────────────────────────
 @app.route("/")
@@ -143,6 +148,53 @@ def api_chat_messages(chat_id):
         return jsonify({"ok": False, "error": "Kein Zugriff."}), 403
     messages = get_chat_conversation(chat_id)
     return jsonify([chat_message_to_dict(m) for m in messages])
+
+@app.route("/api/chats/<int:chat_id>/messages/<int:message_id>", methods=["PATCH"])
+@login_required
+def api_edit_message(chat_id, message_id):
+    """Edits the content of a message. Only the original sender may do this."""
+    me = session["user_id"]
+    if not is_chat_member(chat_id, me):
+        return jsonify({"ok": False, "error": "Kein Zugriff."}), 403
+
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+    if not content:
+        return jsonify({"ok": False, "error": "Nachricht darf nicht leer sein."}), 400
+    if len(content) > 2000:
+        return jsonify({"ok": False, "error": "Nachricht zu lang."}), 400
+
+    updated = update_chat_message(message_id, me, content)
+    if updated is None:
+        # Either wrong message_id or the caller is not the original sender.
+        return jsonify({"ok": False, "error": "Nachricht nicht gefunden oder kein Zugriff."}), 403
+
+    payload = chat_message_to_dict(updated, sender_name=session.get("username", ""))
+    socketio.emit("message_edited", payload, room=f"chat_{chat_id}")
+    return jsonify({"ok": True, "message": payload})
+
+
+@app.route("/api/chats/<int:chat_id>/messages/<int:message_id>", methods=["DELETE"])
+@login_required
+def api_delete_message(chat_id, message_id):
+    """Deletes a message. Only the original sender may do this.
+    chat_notifications rows referencing the message are removed automatically
+    by the ON DELETE CASCADE constraint on chat_notifications.message_id.
+    """
+    me = session["user_id"]
+    if not is_chat_member(chat_id, me):
+        return jsonify({"ok": False, "error": "Kein Zugriff."}), 403
+
+    deleted = delete_chat_message(message_id, me)
+    if not deleted:
+        return jsonify({"ok": False, "error": "Nachricht nicht gefunden oder kein Zugriff."}), 403
+
+    socketio.emit(
+        "message_deleted",
+        {"chat_id": chat_id, "message_id": message_id},
+        room=f"chat_{chat_id}",
+    )
+    return jsonify({"ok": True})
 
 
 @app.route("/api/notifications")
