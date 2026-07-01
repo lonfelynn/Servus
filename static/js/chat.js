@@ -10,8 +10,11 @@ const chatsById = {};    // chat_id → Chat-Objekt (id, display_name, members, 
 let allUsers = [];       // alle anderen Nutzer (für Kontaktliste + Mitglieder-Picker)
 const unreadByChat = {}; // chat_id → Anzahl ungelesener Nachrichten
 
-const userListEl   = document.getElementById("user-list");
-const chatListEl   = document.getElementById("chat-list");
+const chatListEl     = document.getElementById("chat-list");
+const searchInputEl  = document.getElementById("search-input");
+const searchResultsEl = document.getElementById("search-results");
+const requestsListEl = document.getElementById("requests-list");
+const requestsBadge  = document.getElementById("requests-badge");
 const messagesEl   = document.getElementById("messages");
 const placeholder  = document.getElementById("chat-placeholder");
 const chatView     = document.getElementById("chat-view");
@@ -32,24 +35,10 @@ async function loadMe() {
     `Level ${me.level} · ${me.xp} XP`;
 }
 
-// ── Kontaktliste laden (Einstieg für neue 1-zu-1-Chats) ───
+// ── Alle Nutzer laden (nur für den Gruppen-Mitglieder-Picker) ─
 async function loadUsers() {
   const res = await fetch("/api/users");
   allUsers = await res.json();
-
-  userListEl.innerHTML = allUsers.map(u => `
-    <div class="user-item" data-id="${u.id}">
-      <div class="avatar">${escapeHtml(u.username.charAt(0))}</div>
-      <div class="user-info">
-        <div class="user-name">${escapeHtml(u.username)}</div>
-        <div class="user-sub">Level ${u.level}</div>
-      </div>
-    </div>
-  `).join("") || `<div class="empty-list">Keine weiteren Nutzer.</div>`;
-
-  userListEl.querySelectorAll(".user-item").forEach(item => {
-    item.addEventListener("click", () => startDirectChat(Number(item.dataset.id)));
-  });
 }
 
 // ── Chat-Liste laden ──────────────────────────────────────
@@ -121,7 +110,9 @@ async function openChat(chatId) {
   scrollToBottom();
   msgInput.focus();
 
-  markChatRead(chatId);
+  // Öffnen markiert den Chat immer als gelesen (force), auch wenn der lokale
+  // Zähler noch nicht geladen ist (z.B. frischer Chat nach Anfrage-Annahme).
+  markChatRead(chatId, true);
   if (window.showChatMobile) window.showChatMobile();
 }
 
@@ -187,7 +178,15 @@ socket.on("new_message", (msg) => {
 socket.on("chat_updated", async (data) => {
   socket.emit("join_chat", { chat_id: data.chat_id });
   await loadChats();
+  loadNotifications();   // z.B. Intro-Nachricht nach angenommener Anfrage
   if (data.chat_id === activeChatId) refreshActiveHeader();
+});
+
+// ── Freundschafts-Events (Echtzeit) ───────────────────────
+socket.on("friend_request", () => loadRequests());
+socket.on("friend_update", () => {
+  loadRequests();
+  if (searchInputEl.value.trim()) runSearch();   // Status in der Suche aktualisieren
 });
 
 socket.on("chat_removed", (data) => {
@@ -249,7 +248,10 @@ document.getElementById("group-create-btn").addEventListener("click", async () =
     body: JSON.stringify({ member_ids: ids, name: groupNameIn.value.trim() }),
   });
   const data = await res.json();
-  if (!data.ok) return;
+  if (!data.ok) {
+    alert(data.error || "Gruppe konnte nicht erstellt werden.");
+    return;
+  }
 
   groupModal.classList.add("hidden");
   socket.emit("join_chat", { chat_id: data.chat.id });
@@ -341,6 +343,163 @@ async function removeMember(userId) {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// ── Nutzersuche ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+let searchTimer = null;
+
+searchInputEl.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 250);   // Debounce
+});
+
+async function runSearch() {
+  const q = searchInputEl.value.trim();
+  if (!q) {
+    searchResultsEl.innerHTML = "";
+    return;
+  }
+  const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) return;
+  const users = await res.json();
+
+  if (users.length === 0) {
+    searchResultsEl.innerHTML = `<div class="empty-list">Keine Treffer.</div>`;
+    return;
+  }
+
+  searchResultsEl.innerHTML = users.map(u => `
+    <div class="user-item" data-id="${u.id}" data-name="${escapeHtml(u.username)}">
+      <div class="avatar">${escapeHtml(u.username.charAt(0))}</div>
+      <div class="user-info">
+        <div class="user-name">${escapeHtml(u.username)}</div>
+        <div class="user-sub">Level ${u.level} · ${u.mutual_friends} gemeinsame Freunde</div>
+      </div>
+      ${searchActionHtml(u)}
+    </div>
+  `).join("");
+
+  searchResultsEl.querySelectorAll("[data-action]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = Number(btn.dataset.id);
+      const name = btn.dataset.name;
+      if (btn.dataset.action === "request") openRequestModal(id, name);
+      else if (btn.dataset.action === "open") startDirectChat(id);
+    });
+  });
+}
+
+// Aktions-Button je nach Freundschaftsstatus
+function searchActionHtml(u) {
+  switch (u.status) {
+    case "friends":
+      return `<button class="btn-action" data-action="open" data-id="${u.id}">Nachricht</button>`;
+    case "pending_outgoing":
+      return `<span class="status-tag">Angefragt</span>`;
+    case "pending_incoming":
+      return `<span class="status-tag">Antwortet unten</span>`;
+    default:
+      return `<button class="btn-action" data-action="request" data-id="${u.id}" data-name="${escapeHtml(u.username)}">Anfrage</button>`;
+  }
+}
+
+// ── Modal: Freundschaftsanfrage senden ────────────────────
+const requestModal   = document.getElementById("request-modal");
+const requestMsgEl   = document.getElementById("request-message");
+const requestSubEl   = document.getElementById("request-modal-sub");
+const requestCountEl = document.getElementById("request-charcount");
+let requestTargetId  = null;
+
+function openRequestModal(userId, userName) {
+  requestTargetId = userId;
+  requestSubEl.textContent = `An ${userName}`;
+  requestMsgEl.value = "";
+  requestCountEl.textContent = "0 / 2048";
+  requestModal.classList.remove("hidden");
+  requestMsgEl.focus();
+}
+
+requestMsgEl.addEventListener("input", () => {
+  requestCountEl.textContent = `${requestMsgEl.value.length} / 2048`;
+});
+
+document.getElementById("request-cancel-btn").addEventListener("click", () => {
+  requestModal.classList.add("hidden");
+});
+
+document.getElementById("request-send-btn").addEventListener("click", async () => {
+  if (requestTargetId === null) return;
+  const res = await fetch("/api/friends/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: requestTargetId, message: requestMsgEl.value.trim() }),
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    alert(data.error || "Anfrage konnte nicht gesendet werden.");
+    return;
+  }
+  requestModal.classList.add("hidden");
+  runSearch();   // Status → „Angefragt"
+});
+
+// ════════════════════════════════════════════════════════════
+// ── Freundschaftsanfragen (eingehend) ──────────────────────
+// ════════════════════════════════════════════════════════════
+async function loadRequests() {
+  const res = await fetch("/api/friends/requests");
+  if (!res.ok) return;
+  const requests = await res.json();
+
+  if (requests.length === 0) {
+    requestsListEl.innerHTML = "";
+    requestsBadge.classList.add("hidden");
+  } else {
+    requestsBadge.textContent = requests.length > 99 ? "99+" : String(requests.length);
+    requestsBadge.classList.remove("hidden");
+
+    requestsListEl.innerHTML = requests.map(r => `
+      <div class="request-card" data-id="${r.id}">
+        <div class="request-top">
+          <div class="avatar">${escapeHtml(r.requester_name.charAt(0))}</div>
+          <div class="user-info">
+            <div class="user-name">${escapeHtml(r.requester_name)}</div>
+            <div class="user-sub">${r.mutual_friends} gemeinsame Freunde</div>
+          </div>
+        </div>
+        ${r.intro_message ? `<div class="request-message">${escapeHtml(r.intro_message)}</div>` : ""}
+        <div class="request-actions">
+          <button class="btn-action btn-accept" data-accept="${r.id}">Annehmen</button>
+          <button class="btn-action btn-decline" data-decline="${r.id}">Ablehnen</button>
+        </div>
+      </div>
+    `).join("");
+
+    requestsListEl.querySelectorAll("[data-accept]").forEach(btn =>
+      btn.addEventListener("click", () => acceptRequest(Number(btn.dataset.accept))));
+    requestsListEl.querySelectorAll("[data-decline]").forEach(btn =>
+      btn.addEventListener("click", () => declineRequest(Number(btn.dataset.decline))));
+  }
+}
+
+async function acceptRequest(requestId) {
+  const res = await fetch(`/api/friends/requests/${requestId}/accept`, { method: "POST" });
+  const data = await res.json();
+  if (!data.ok) return;
+  await loadRequests();
+  if (data.chat) {
+    socket.emit("join_chat", { chat_id: data.chat.id });
+    await loadChats();
+    openChat(data.chat.id);
+  }
+}
+
+async function declineRequest(requestId) {
+  await fetch(`/api/friends/requests/${requestId}/decline`, { method: "POST" });
+  loadRequests();
+}
+
 // ── Hilfsfunktionen ───────────────────────────────────────
 function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -416,6 +575,7 @@ async function init() {
   await loadUsers();   // muss vor loadChats/Pickern stehen (allUsers befüllen)
   await loadChats();
   loadNotifications();
+  loadRequests();
 }
 
 init();

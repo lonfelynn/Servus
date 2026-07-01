@@ -24,7 +24,17 @@ from models import (
     create_chat_notifications,
     get_unread_chat_counts,
     mark_chat_notifications_read,
+    are_friends,
+    get_friendship,
+    search_users,
+    create_friend_request,
+    get_incoming_requests,
+    accept_friend_request,
+    delete_friend_request,
 )
+
+# Max length of the single intro message a requester may attach to a request.
+FRIEND_INTRO_MAX_LEN = 2048
 
 # ── App setup ───────────────────────────────────────────────
 app = Flask(__name__)
@@ -126,6 +136,13 @@ def api_create_chat():
     if len(member_ids) < 2:
         return jsonify({"ok": False, "error": "Ein Chat braucht mindestens zwei Mitglieder."}), 400
 
+    # A 1-on-1 chat may only be opened between accepted friends. Group chats
+    # (3+ members) are not friend-gated.
+    if len(member_ids) == 2:
+        other = next(uid for uid in member_ids if uid != me)
+        if not are_friends(me, other):
+            return jsonify({"ok": False, "error": "Ihr müsst befreundet sein, um direkt zu chatten."}), 403
+
     name = (data.get("name") or "").strip() or None
     chat_id = find_or_create_chat(member_ids, created_by=me, name=name)
 
@@ -157,6 +174,112 @@ def api_notifications():
 def api_notifications_read(chat_id):
     """Marks all unread messages in a chat as read for the current user."""
     mark_chat_notifications_read(session["user_id"], chat_id)
+    return jsonify({"ok": True})
+
+
+# ── Friends & search API ────────────────────────────────────
+def request_to_dict(req):
+    """JSON-serializable incoming friend request (datetime → string)."""
+    return {
+        "id": req["id"],
+        "requester_id": req["requester_id"],
+        "requester_name": req["requester_name"],
+        "intro_message": req["intro_message"],
+        "mutual_friends": req["mutual_friends"],
+        "created_at": req["created_at"].isoformat(),
+    }
+
+
+@app.route("/api/users/search")
+@login_required
+def api_search_users():
+    """Finds users by username, with friend status + mutual friend count."""
+    query = (request.args.get("q") or "").strip()
+    if not query:
+        return jsonify([])
+    return jsonify(search_users(query, session["user_id"]))
+
+
+@app.route("/api/friends/requests")
+@login_required
+def api_friend_requests():
+    """Pending friend requests addressed to the current user."""
+    reqs = get_incoming_requests(session["user_id"])
+    return jsonify([request_to_dict(r) for r in reqs])
+
+
+@app.route("/api/friends/request", methods=["POST"])
+@login_required
+def api_friend_request():
+    """Sends a friend request with an optional single intro message (≤2048)."""
+    me = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    try:
+        target = int(data.get("user_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Ungültiger Nutzer."}), 400
+    if target == me:
+        return jsonify({"ok": False, "error": "Du kannst dir nicht selbst eine Anfrage senden."}), 400
+    if get_user_by_id(target) is None:
+        return jsonify({"ok": False, "error": "Nutzer nicht gefunden."}), 404
+
+    message = (data.get("message") or "").strip()
+    if len(message) > FRIEND_INTRO_MAX_LEN:
+        return jsonify({"ok": False,
+                        "error": f"Die Nachricht darf höchstens {FRIEND_INTRO_MAX_LEN} Zeichen haben."}), 400
+    message = message or None
+
+    fs = get_friendship(me, target)
+    if fs and fs["status"] == "accepted":
+        return jsonify({"ok": False, "error": "Ihr seid bereits Freunde."}), 400
+    if fs and fs["status"] == "pending":
+        if fs["requester_id"] == me:
+            return jsonify({"ok": False, "error": "Deine Anfrage läuft bereits."}), 400
+        return jsonify({"ok": False,
+                        "error": "Dieser Nutzer hat dir bereits eine Anfrage gesendet – beantworte sie unten."}), 400
+
+    create_friend_request(me, target, message)
+    socketio.emit("friend_request", {"from": me}, room=f"user_{target}")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/friends/requests/<int:request_id>/accept", methods=["POST"])
+@login_required
+def api_friend_accept(request_id):
+    """Accepts a request: befriends the two users and opens their DM chat,
+    delivering the requester's intro message as the first message."""
+    me = session["user_id"]
+    res = accept_friend_request(request_id, me)
+    if res is None:
+        return jsonify({"ok": False, "error": "Anfrage nicht gefunden."}), 404
+
+    requester_id = res["requester_id"]
+    chat_id = find_or_create_chat([requester_id, me], created_by=requester_id)
+
+    if res["intro_message"]:
+        message = save_chat_message(chat_id, requester_id, res["intro_message"])
+        try:
+            create_chat_notifications(chat_id, message["id"], requester_id)
+        except Exception:
+            pass
+
+    # Both parties join the new chat room and refresh chats + friend UI.
+    for uid in (requester_id, me):
+        socketio.emit("chat_updated", {"chat_id": chat_id}, room=f"user_{uid}")
+        socketio.emit("friend_update", {}, room=f"user_{uid}")
+    return jsonify({"ok": True, "chat": get_chat(chat_id, me)})
+
+
+@app.route("/api/friends/requests/<int:request_id>/decline", methods=["POST"])
+@login_required
+def api_friend_decline(request_id):
+    """Declines (or cancels) a pending request."""
+    me = session["user_id"]
+    row = delete_friend_request(request_id, me)
+    if row is not None:
+        # Refresh both parties' friend UI (outgoing status / incoming list).
+        for uid in (row["requester_id"], row["addressee_id"]):
+            socketio.emit("friend_update", {}, room=f"user_{uid}")
     return jsonify({"ok": True})
 
 

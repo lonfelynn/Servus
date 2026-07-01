@@ -434,3 +434,165 @@ def mark_chat_notifications_read(recipient_id: int, chat_id: int):
             "WHERE  recipient_id = %s AND chat_id = %s AND is_read = FALSE",
             (recipient_id, chat_id)
         )
+
+
+# ── Friendships & friend requests ──────────────────────────
+def get_friend_ids(user_id: int):
+    """Returns the set of user ids that are accepted friends of `user_id`."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT CASE WHEN requester_id = %s THEN addressee_id ELSE requester_id END AS fid
+            FROM   friendships
+            WHERE  status = 'accepted' AND (requester_id = %s OR addressee_id = %s)
+            """,
+            (user_id, user_id, user_id)
+        )
+        return {row["fid"] for row in cursor.fetchall()}
+
+
+def get_friendship(a: int, b: int):
+    """Returns the friendship row between two users (either direction) or None."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM friendships
+            WHERE (requester_id = %s AND addressee_id = %s)
+               OR (requester_id = %s AND addressee_id = %s)
+            LIMIT 1
+            """,
+            (a, b, b, a)
+        )
+        return cursor.fetchone()
+
+
+def are_friends(a: int, b: int) -> bool:
+    """Whether two users are accepted friends."""
+    fs = get_friendship(a, b)
+    return fs is not None and fs["status"] == "accepted"
+
+
+def _friend_status(fs, viewer_id: int) -> str:
+    """Maps a friendship row to a status from the viewer's perspective:
+    'none' | 'friends' | 'pending_outgoing' | 'pending_incoming'."""
+    if fs is None:
+        return "none"
+    if fs["status"] == "accepted":
+        return "friends"
+    return "pending_outgoing" if fs["requester_id"] == viewer_id else "pending_incoming"
+
+
+def search_users(query: str, viewer_id: int, limit: int = 20):
+    """Finds users by username (excluding the viewer). Each result carries the
+    friend status and the number of mutual friends with the viewer."""
+    like = f"%{query}%"
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, username, level
+            FROM   users
+            WHERE  id <> %s AND username ILIKE %s
+            ORDER  BY username
+            LIMIT  %s
+            """,
+            (viewer_id, like, limit)
+        )
+        rows = cursor.fetchall()
+
+    viewer_friends = get_friend_ids(viewer_id)
+    results = []
+    for r in rows:
+        fs = get_friendship(viewer_id, r["id"])
+        results.append({
+            "id": r["id"],
+            "username": r["username"],
+            "level": r["level"],
+            "status": _friend_status(fs, viewer_id),
+            "mutual_friends": len(viewer_friends & get_friend_ids(r["id"])),
+        })
+    return results
+
+
+def create_friend_request(requester_id: int, addressee_id: int, message: "str | None"):
+    """Creates (or refreshes) a pending friend request with an optional intro
+    message. Returns the row."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            INSERT INTO friendships (requester_id, addressee_id, status, intro_message)
+            VALUES (%s, %s, 'pending', %s)
+            ON CONFLICT (requester_id, addressee_id)
+            DO UPDATE SET status        = 'pending',
+                          intro_message = EXCLUDED.intro_message,
+                          created_at    = CURRENT_TIMESTAMP,
+                          responded_at  = NULL
+            RETURNING id, requester_id, addressee_id, intro_message, created_at
+            """,
+            (requester_id, addressee_id, message)
+        )
+        return cursor.fetchone()
+
+
+def get_incoming_requests(user_id: int):
+    """Returns pending requests addressed to the user, incl. the sender's name,
+    the intro message and the number of mutual friends."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT f.id, f.requester_id, u.username AS requester_name,
+                   f.intro_message, f.created_at
+            FROM   friendships f
+            JOIN   users u ON u.id = f.requester_id
+            WHERE  f.addressee_id = %s AND f.status = 'pending'
+            ORDER  BY f.created_at DESC
+            """,
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+
+    viewer_friends = get_friend_ids(user_id)
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["mutual_friends"] = len(viewer_friends & get_friend_ids(r["requester_id"]))
+        result.append(d)
+    return result
+
+
+def accept_friend_request(request_id: int, user_id: int):
+    """Accepts a pending request where `user_id` is the addressee. Returns the
+    row (requester_id, addressee_id, intro_message) or None if it does not apply."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            UPDATE friendships
+            SET    status = 'accepted', responded_at = CURRENT_TIMESTAMP
+            WHERE  id = %s AND addressee_id = %s AND status = 'pending'
+            RETURNING requester_id, addressee_id, intro_message
+            """,
+            (request_id, user_id)
+        )
+        return cursor.fetchone()
+
+
+def delete_friend_request(request_id: int, user_id: int):
+    """Removes a pending request — used to decline (addressee) or cancel
+    (requester). Returns the deleted row (requester_id, addressee_id) or None."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            DELETE FROM friendships
+            WHERE  id = %s AND status = 'pending'
+               AND (addressee_id = %s OR requester_id = %s)
+            RETURNING requester_id, addressee_id
+            """,
+            (request_id, user_id, user_id)
+        )
+        return cursor.fetchone()

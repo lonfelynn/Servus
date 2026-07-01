@@ -36,10 +36,18 @@
       <div class="empty-list">Lade Chats…</div>
     </div>
 
-    <div class="list-title">Neuer Chat mit…</div>
-    <div class="user-list" id="user-list">
-      <div class="empty-list">Lade Kontakte…</div>
+    <div class="list-header" id="requests-header">
+      <div class="list-title">Anfragen</div>
+      <div class="notif-badge hidden" id="requests-badge"></div>
     </div>
+    <div class="requests-list" id="requests-list"></div>
+
+    <div class="list-title">Nutzer suchen</div>
+    <div class="search-box">
+      <input type="text" id="search-input" class="search-input"
+             placeholder="Nutzername suchen…" maxlength="80" autocomplete="off"/>
+    </div>
+    <div class="search-results" id="search-results"></div>
   </aside>
 
   <!-- Chat -->
@@ -105,6 +113,21 @@
     <div class="member-picker" id="manage-add-picker"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="manage-close-btn">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Freundschaftsanfrage senden -->
+<div class="modal-overlay hidden" id="request-modal">
+  <div class="modal">
+    <div class="modal-title">Freundschaftsanfrage</div>
+    <div class="modal-label" id="request-modal-sub"></div>
+    <textarea id="request-message" class="modal-input" rows="4" maxlength="2048"
+              placeholder="Nachricht (optional, max. 2048 Zeichen)…"></textarea>
+    <div class="modal-hint" id="request-charcount">0 / 2048</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="request-cancel-btn">Abbrechen</button>
+      <button class="btn btn-primary" id="request-send-btn">Anfrage senden</button>
     </div>
   </div>
 </div>
