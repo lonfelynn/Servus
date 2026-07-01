@@ -177,3 +177,216 @@ def mark_all_notifications_read(user_id: int):
             "WHERE  recipient_id = %s AND is_read = FALSE",
             (user_id,)
         )
+
+
+# ── Chats (unified model — every chat, incl. 1-on-1 DMs, lives here) ─────
+def _display_name(name, members, viewer_id):
+    """Derives what a chat is called for a given viewer.
+
+    If the chat has an explicit `name`, that wins. Otherwise the name is built
+    from the *other* members' usernames (so a 1-on-1 chat shows the partner's
+    name, a group shows "Bob & Carl"). Falls back to the viewer's own name for
+    a chat that only contains themselves.
+    """
+    if name:
+        return name
+    others = [m["username"] for m in members if m["id"] != viewer_id]
+    names = others or [m["username"] for m in members]
+    if len(names) <= 2:
+        return " & ".join(names)
+    return ", ".join(names[:-1]) + " & " + names[-1]
+
+
+def find_or_create_chat(member_ids, created_by=None, name=None):
+    """Returns the id of the chat whose members are *exactly* `member_ids`,
+    creating it if none exists. This is the de-duplication guarantee: the same
+    set of users can never have two separate chats.
+    """
+    ids = sorted(set(member_ids))
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        # A chat matches iff it has exactly len(ids) members and every one of
+        # them is in `ids` — together that means the member sets are equal.
+        cursor.execute(
+            """
+            SELECT chat_id
+            FROM   chat_members
+            GROUP  BY chat_id
+            HAVING COUNT(*) = %s AND bool_and(user_id = ANY(%s))
+            """,
+            (len(ids), ids)
+        )
+        row = cursor.fetchone()
+        if row:
+            return row["chat_id"]
+
+        cursor.execute(
+            "INSERT INTO chats (name, created_by) VALUES (%s, %s) RETURNING id",
+            (name, created_by)
+        )
+        chat_id = cursor.fetchone()["id"]
+        for uid in ids:
+            cursor.execute(
+                "INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s)",
+                (chat_id, uid)
+            )
+        return chat_id
+
+
+def get_user_chat_ids(user_id: int):
+    """Returns just the ids of every chat the user is a member of
+    (used to join the Socket.IO rooms on connect)."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT chat_id FROM chat_members WHERE user_id = %s",
+            (user_id,)
+        )
+        return [row["chat_id"] for row in cursor.fetchall()]
+
+
+def get_user_chats(user_id: int):
+    """Returns every chat the user is in, each as a dict with its members,
+    derived display name and group flag, ordered by most recent activity."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT c.id, c.name,
+                   array_agg(u.id       ORDER BY u.username) AS member_ids,
+                   array_agg(u.username ORDER BY u.username) AS member_names,
+                   (SELECT MAX(sent_at) FROM chat_messages m
+                     WHERE m.chat_id = c.id) AS last_at
+            FROM   chats c
+            JOIN   chat_members cm ON cm.chat_id = c.id
+            JOIN   users u         ON u.id = cm.user_id
+            WHERE  c.id IN (SELECT chat_id FROM chat_members WHERE user_id = %s)
+            GROUP  BY c.id, c.name
+            ORDER  BY last_at DESC NULLS LAST, c.id DESC
+            """,
+            (user_id,)
+        )
+        chats = []
+        for row in cursor.fetchall():
+            members = [
+                {"id": mid, "username": mname}
+                for mid, mname in zip(row["member_ids"], row["member_names"])
+            ]
+            chats.append({
+                "id": row["id"],
+                "name": row["name"],
+                "display_name": _display_name(row["name"], members, user_id),
+                "members": members,
+                "is_group": len(members) > 2,
+            })
+        return chats
+
+
+def get_chat(chat_id: int, viewer_id: int):
+    """Returns a single chat (same shape as an entry from get_user_chats),
+    or None if it does not exist."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT id, name FROM chats WHERE id = %s", (chat_id,))
+        chat = cursor.fetchone()
+        if chat is None:
+            return None
+    members = get_chat_members(chat_id)
+    return {
+        "id": chat["id"],
+        "name": chat["name"],
+        "display_name": _display_name(chat["name"], members, viewer_id),
+        "members": members,
+        "is_group": len(members) > 2,
+    }
+
+
+def get_chat_members(chat_id: int):
+    """Returns the members of a chat as a list of {id, username} dicts."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT u.id, u.username
+            FROM   chat_members cm
+            JOIN   users u ON u.id = cm.user_id
+            WHERE  cm.chat_id = %s
+            ORDER  BY u.username
+            """,
+            (chat_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def is_chat_member(chat_id: int, user_id: int) -> bool:
+    """Whether the user belongs to the chat — the guard for every chat action."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT 1 FROM chat_members WHERE chat_id = %s AND user_id = %s",
+            (chat_id, user_id)
+        )
+        return cursor.fetchone() is not None
+
+
+def add_chat_member(chat_id: int, user_id: int):
+    """Adds a user to a chat. Does nothing if they are already a member."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            (chat_id, user_id)
+        )
+
+
+def remove_chat_member(chat_id: int, user_id: int):
+    """Removes a user from a chat (also used when a user leaves)."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "DELETE FROM chat_members WHERE chat_id = %s AND user_id = %s",
+            (chat_id, user_id)
+        )
+
+
+def rename_chat(chat_id: int, name: "str | None"):
+    """Sets a chat's explicit name. Pass None/empty to fall back to the
+    member-derived name again."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE chats SET name = %s WHERE id = %s",
+            (name or None, chat_id)
+        )
+
+
+def save_chat_message(chat_id: int, sender_id: int, content: str):
+    """Stores a chat message and returns the created row."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO chat_messages (chat_id, sender_id, content) "
+            "VALUES (%s, %s, %s) "
+            "RETURNING id, chat_id, sender_id, content, sent_at",
+            (chat_id, sender_id, content)
+        )
+        return cursor.fetchone()
+
+
+def get_chat_conversation(chat_id: int):
+    """Returns all messages in a chat, oldest first, incl. the sender's name."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT m.id, m.chat_id, m.sender_id, m.content, m.sent_at,
+                   u.username AS sender_name
+            FROM   chat_messages m
+            JOIN   users u ON u.id = m.sender_id
+            WHERE  m.chat_id = %s
+            ORDER  BY m.sent_at ASC
+            """,
+            (chat_id,)
+        )
+        return cursor.fetchall()

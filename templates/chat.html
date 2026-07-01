@@ -13,7 +13,7 @@
 <div class="app">
 
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-top">
       <div class="logo-icon">💬</div>
       <div class="logo-text">Servus</div>
@@ -28,23 +28,36 @@
       <button class="icon-btn" id="logout-btn" title="Abmelden">⎋</button>
     </div>
 
-    <div class="list-title">Kontakte</div>
+    <div class="list-header">
+      <div class="list-title">Chats</div>
+      <button class="icon-btn" id="new-group-btn" title="Neue Gruppe">＋</button>
+    </div>
+    <div class="chat-list" id="chat-list">
+      <div class="empty-list">Lade Chats…</div>
+    </div>
+
+    <div class="list-title">Neuer Chat mit…</div>
     <div class="user-list" id="user-list">
       <div class="empty-list">Lade Kontakte…</div>
     </div>
   </aside>
 
   <!-- Chat -->
-  <main class="chat">
+  <main class="chat" id="chat-main">
     <div id="chat-placeholder" class="placeholder">
       <div class="big">💬</div>
-      <p>Wähle links einen Kontakt aus, um zu chatten.</p>
+      <p>Wähle links einen Chat aus oder starte einen neuen.</p>
     </div>
 
     <div id="chat-view" class="chat hidden" style="min-width:0;">
       <div class="chat-header">
+        <button class="back-btn" id="back-btn" title="Zurück">‹</button>
         <div class="avatar" id="peer-avatar"></div>
-        <div class="chat-header-name" id="peer-name"></div>
+        <div class="chat-header-info">
+          <div class="chat-header-name" id="peer-name"></div>
+          <div class="chat-header-sub" id="peer-sub"></div>
+        </div>
+        <button class="icon-btn" id="chat-settings-btn" title="Chat verwalten">⚙</button>
       </div>
 
       <div class="messages" id="messages"></div>
@@ -61,43 +74,70 @@
 
 </div>
 
+<!-- Modal: Neue Gruppe erstellen -->
+<div class="modal-overlay hidden" id="group-modal">
+  <div class="modal">
+    <div class="modal-title">Neue Gruppe</div>
+    <input class="modal-input" id="group-name-input" type="text"
+           placeholder="Gruppenname (optional)" maxlength="80"/>
+    <div class="modal-label">Mitglieder auswählen</div>
+    <div class="member-picker" id="group-member-picker"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="group-cancel-btn">Abbrechen</button>
+      <button class="btn btn-primary" id="group-create-btn">Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Chat verwalten (umbenennen / Mitglieder) -->
+<div class="modal-overlay hidden" id="manage-modal">
+  <div class="modal">
+    <div class="modal-title">Chat verwalten</div>
+    <div class="modal-label">Name</div>
+    <div class="modal-row">
+      <input class="modal-input" id="rename-input" type="text"
+             placeholder="Chatname" maxlength="80"/>
+      <button class="btn btn-primary" id="rename-btn">Speichern</button>
+    </div>
+    <div class="modal-label">Mitglieder</div>
+    <div class="member-list" id="manage-member-list"></div>
+    <div class="modal-label">Hinzufügen</div>
+    <div class="member-picker" id="manage-add-picker"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="manage-close-btn">Schließen</button>
+    </div>
+  </div>
+</div>
+
 <!-- Server-Werte für das Script bereitstellen -->
 <script>
   window.SERVUS = { me: {{ user_id }}, myName: {{ username | tojson }} };
 </script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
-  
+
 <!-- Mobile Navigation: Sidebar ↔ Chat wechseln -->
 <script>
   const isMobile = () => window.innerWidth <= 600;
-  const sidebar  = document.getElementById('sidebar');
-  const chatMain = document.getElementById('chat-main');
+  const sidebarEl = document.getElementById('sidebar');
+  const chatMainEl = document.getElementById('chat-main');
 
-  // Wird aufgerufen wenn ein Kontakt ausgewählt wird (von chat.js aus aufrufen oder Event dispatchen)
-  function showChatMobile() {
+  // Von chat.js aufgerufen, sobald ein Chat geöffnet wird.
+  window.showChatMobile = function () {
     if (!isMobile()) return;
-    sidebar.classList.add('slide-out');
-    chatMain.classList.add('slide-in');
-  }
+    sidebarEl.classList.add('slide-out');
+    chatMainEl.classList.add('slide-in');
+  };
 
-  // Back-Button → zurück zur Sidebar
   document.getElementById('back-btn').addEventListener('click', () => {
-    sidebar.classList.remove('slide-out');
-    chatMain.classList.remove('slide-in');
+    sidebarEl.classList.remove('slide-out');
+    chatMainEl.classList.remove('slide-in');
   });
 
-  // Kontaktklick löst Mobile-Navigation aus
-  document.getElementById('user-list').addEventListener('click', (e) => {
-    const item = e.target.closest('.user-item');
-    if (item) showChatMobile();
-  });
-
-  // Bei Fenstergröße-Änderung Klassen zurücksetzen
   window.addEventListener('resize', () => {
     if (!isMobile()) {
-      sidebar.classList.remove('slide-out');
-      chatMain.classList.remove('slide-in');
+      sidebarEl.classList.remove('slide-out');
+      chatMainEl.classList.remove('slide-in');
     }
   });
 </script>
