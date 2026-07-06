@@ -191,6 +191,10 @@ body {
   color: var(--text);
   border-bottom-left-radius: 5px;
 }
+.bubble.is-deleted {
+  font-style: italic;
+  opacity: 0.6;
+}
 .time { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
 @keyframes pop {
@@ -605,7 +609,10 @@ body {
 }
 
 /* ─── Eingehende Freundschaftsanfragen ─── */
-.requests-list { padding: 0 10px; }
+.requests-list { flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px 10px;}
 .request-card {
   background: var(--input);
   border: 1px solid var(--border);

@@ -158,19 +158,22 @@ function renderMessage(msg) {
   row.dataset.id     = msg.id;
   row.dataset.chatId = msg.chat_id;
 
+  const bubbleClass = msg.is_deleted ? "bubble is-deleted" : "bubble";
+  const bubbleContent = msg.is_deleted ? "Diese Nachricht wurde gelöscht." : escapeHtml(msg.content);
+  
   row.innerHTML = `
     ${showSender ? `<div class="sender">${escapeHtml(msg.sender_name || "")}</div>` : ""}
-    <div class="bubble">${escapeHtml(msg.content)}</div>
-    ${msg.edited_at ? `<div class="edited-marker">(bearbeitet)</div>` : ""}
+    <div class="${bubbleClass}">${bubbleContent}</div>
+    ${(!msg.is_deleted && msg.edited_at) ? `<div class="edited-marker">(bearbeitet)</div>` : ""}
     <div class="time">${formatTime(msg.sent_at)}</div>
-    ${mine ? `
+    ${(mine && !msg.is_deleted) ? 
     <div class="msg-actions">
       <button class="msg-btn msg-edit-btn"   title="Bearbeiten">✎</button>
       <button class="msg-btn msg-delete-btn" title="Löschen">✕</button>
     </div>` : ""}
   `;
 
-  if (mine) {
+  if (mine && !msg.is_deleted)  {
     row.querySelector(".msg-edit-btn").addEventListener("click", () => {
       // Bereits im Bearbeitungsmodus → nichts tun.
       if (row.querySelector(".edit-input")) return;
@@ -720,7 +723,21 @@ socket.on("message_edited", (msg) => {
 
 socket.on("message_deleted", (data) => {
   const row = messagesEl.querySelector(`.row[data-id="${data.message_id}"]`);
-  if (row) row.remove();
+    if (row) {
+    const bubble = row.querySelector(".bubble");
+    if (bubble) {
+      bubble.textContent = "Diese Nachricht wurde gelöscht.";
+      bubble.className = "bubble is-deleted";
+    }
+    const actions = row.querySelector(".msg-actions");
+    if (actions) {
+      actions.remove();
+    }
+    const marker = row.querySelector(".edited-marker");
+    if (marker) {
+      marker.remove();
+    }
+  }
 });
 
 // ════════════════════════════════════════════════════════════
