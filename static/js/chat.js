@@ -4,8 +4,10 @@ const MY_NAME = window.SERVUS.myName;
 
 const socket = io();
 
-// Höchstlänge einer angezeigten Nachrichten-Vorschau (Sidebar + Anfragen).
+// Höchstlänge einer angezeigten Nachrichten-Vorschau in den Anfragen.
 const PREVIEW_MAX = 64;
+// Höchstlänge der letzten-Nachricht-Vorschau in der Chat-Sidebar.
+const SIDEBAR_PREVIEW_MAX = 15;
 // Client-seitiges Ratelimit (spiegelt den Server: 5 Nachrichten / 5 s).
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW = 5000;
@@ -57,7 +59,7 @@ async function loadFriends() {
 
 // Unterzeile eines Chat-Eintrags: gekürzte letzte Nachricht, sonst Fallback.
 function chatSubline(chat) {
-  if (chat.last_message) return truncate(chat.last_message);
+  if (chat.last_message) return truncate(chat.last_message, SIDEBAR_PREVIEW_MAX);
   return chat.is_group ? chat.members.length + " Mitglieder" : "Direktnachricht";
 }
 
