@@ -609,7 +609,10 @@ body {
 }
 
 /* ─── Eingehende Freundschaftsanfragen ─── */
-.requests-list { padding: 0 10px; }
+.requests-list { flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px 10px;}
 .request-card {
   background: var(--input);
   border: 1px solid var(--border);
