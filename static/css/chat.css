@@ -191,6 +191,10 @@ body {
   color: var(--text);
   border-bottom-left-radius: 5px;
 }
+.bubble.is-deleted {
+  font-style: italic;
+  opacity: 0.6;
+}
 .time { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
 @keyframes pop {
