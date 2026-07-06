@@ -363,11 +363,15 @@ async function addMember(userId) {
 
 async function removeMember(userId) {
   const chatId = activeChatId;
-  // Das Verlassen einer Gruppe muss bestätigt werden.
+  const chat = chatsById[chatId];
+  // Das Verlassen einer Gruppe sowie das Entfernen anderer muss bestätigt werden.
   if (userId === ME) {
-    const chat = chatsById[chatId];
     const label = chat && chat.is_group ? "diese Gruppe" : "diesen Chat";
     if (!confirm(`Möchtest du ${label} wirklich verlassen?`)) return;
+  } else {
+    const member = chat && chat.members.find(m => m.id === userId);
+    const name = member ? member.username : "dieses Mitglied";
+    if (!confirm(`Möchtest du ${name} wirklich aus dem Chat entfernen?`)) return;
   }
   await fetch(`/api/chats/${chatId}/members/${userId}`, { method: "DELETE" });
   // Sich selbst entfernt → Chat wird über chat_removed geschlossen.
@@ -375,7 +379,6 @@ async function removeMember(userId) {
     manageModal.classList.add("hidden");
     return;
   }
-  const chat = chatsById[chatId];
   if (chat) {
     chat.members = chat.members.filter(m => m.id !== userId);
     renderManageMembers(chat);
