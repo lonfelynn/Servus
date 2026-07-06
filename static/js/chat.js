@@ -166,7 +166,7 @@ function renderMessage(msg) {
     <div class="${bubbleClass}">${bubbleContent}</div>
     ${(!msg.is_deleted && msg.edited_at) ? `<div class="edited-marker">(bearbeitet)</div>` : ""}
     <div class="time">${formatTime(msg.sent_at)}</div>
-    ${(mine && !msg.is_deleted) ? 
+    ${(mine && !msg.is_deleted) ? `
     <div class="msg-actions">
       <button class="msg-btn msg-edit-btn"   title="Bearbeiten">✎</button>
       <button class="msg-btn msg-delete-btn" title="Löschen">✕</button>
