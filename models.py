@@ -79,7 +79,7 @@ def save_message(sender_id: int, receiver_id: int, content: str):
         cursor.execute(
             "INSERT INTO messages (sender_id, receiver_id, content) "
             "VALUES (%s, %s, %s) "
-            "RETURNING id, sender_id, receiver_id, content, sent_at",
+            "RETURNING id, chat_id, sender_id, content, sent_at, edited_at, is_deleted",
             (sender_id, receiver_id, content)
         )
         return cursor.fetchone()
@@ -396,7 +396,7 @@ def get_chat_conversation(chat_id: int):
         cursor = connection.cursor()
         cursor.execute(
             """
-            SELECT m.id, m.chat_id, m.sender_id, m.content, m.sent_at, m.edited_at,
+            SELECT m.id, m.chat_id, m.sender_id, m.content, m.sent_at, m.edited_at, m.is_deleted,
                    u.username AS sender_name
             FROM   chat_messages m
             JOIN   users u ON u.id = m.sender_id
@@ -466,7 +466,7 @@ def update_chat_message(message_id: int, sender_id: int, new_content: str):
                    edited_at = NOW()
             WHERE  id        = %s
               AND  sender_id = %s
-            RETURNING id, chat_id, sender_id, content, sent_at, edited_at
+            RETURNING id, chat_id, sender_id, content, sent_at, edited_at, is_deleted
             """,
             (new_content, message_id, sender_id)
         )
@@ -474,14 +474,24 @@ def update_chat_message(message_id: int, sender_id: int, new_content: str):
 
 
 def delete_chat_message(message_id: int, sender_id: int) -> bool:
-    """Deletes a message. Only the original sender may delete their own message.
-    Associated chat_notifications rows are removed automatically via ON DELETE CASCADE.
-    Returns True if a row was deleted, False if no row matched.
+    """Marks a message as deleted (soft delete). Only the original sender may delete their own message.
+    Associated chat_notifications rows are removed manually to clear badges.
+    Returns True if a row was updated, False if no row matched.
     """
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
-            "DELETE FROM chat_messages WHERE id = %s AND sender_id = %s",
+            "DELETE FROM chat_notifications WHERE message_id = %s",
+            (message_id,)
+        )
+        cursor.execute(
+            """
+            UPDATE chat_messages
+            SET    is_deleted = TRUE,
+                   content    = ''
+            WHERE  id        = %s
+              AND  sender_id = %s
+            """,
             (message_id, sender_id)
         )
         return cursor.rowcount > 0
