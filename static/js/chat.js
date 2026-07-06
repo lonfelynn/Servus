@@ -545,8 +545,11 @@ function scrollToBottom() {
 }
 
 function formatTime(iso) {
-  return iso.slice(11, 16);
-}
+  let [hours, minutes] = iso.slice(11, 16).split(":");
+
+  hours = (parseInt(hours, 10) + 2) % 24;
+
+  return `${String(hours).padStart(2, "0")}:${minutes}`;
 
 function escapeHtml(str) {
   return String(str)
