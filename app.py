@@ -101,6 +101,7 @@ def chat_message_to_dict(message, sender_name=None):
         "content": message["content"],
         "sent_at": message["sent_at"].isoformat(),
         "edited_at": edited_at.isoformat() if edited_at else None,  # NEU
+        "is_deleted": message.get("is_deleted", False),
     }
 
 # ── Pages ───────────────────────────────────────────────────
