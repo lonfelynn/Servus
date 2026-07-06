@@ -4,6 +4,13 @@ const MY_NAME = window.SERVUS.myName;
 
 const socket = io();
 
+// Höchstlänge einer angezeigten Nachrichten-Vorschau (Sidebar + Anfragen).
+const PREVIEW_MAX = 64;
+// Client-seitiges Ratelimit (spiegelt den Server: 5 Nachrichten / 5 s).
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW = 5000;
+const sendTimes = [];   // Zeitstempel der zuletzt gesendeten Nachrichten
+
 // Aktueller Chat + Caches
 let activeChatId = null;
 const chatsById = {};    // chat_id → Chat-Objekt (id, display_name, members, is_group)
@@ -48,6 +55,20 @@ async function loadFriends() {
   friends = await res.json();
 }
 
+// Unterzeile eines Chat-Eintrags: gekürzte letzte Nachricht, sonst Fallback.
+function chatSubline(chat) {
+  if (chat.last_message) return truncate(chat.last_message);
+  return chat.is_group ? chat.members.length + " Mitglieder" : "Direktnachricht";
+}
+
+// Aktualisiert die letzte-Nachricht-Vorschau eines Chats in der Sidebar.
+function updateChatPreview(chatId, content) {
+  const chat = chatsById[chatId];
+  if (chat) chat.last_message = content;
+  const subEl = chatListEl.querySelector(`.user-item[data-id="${chatId}"] .user-sub`);
+  if (subEl && chat) subEl.textContent = chatSubline(chat);
+}
+
 // ── Chat-Liste laden ──────────────────────────────────────
 async function loadChats(selectId = null) {
   const res = await fetch("/api/chats");
@@ -64,7 +85,7 @@ async function loadChats(selectId = null) {
         <div class="avatar">${escapeHtml(c.display_name.charAt(0))}</div>
         <div class="user-info">
           <div class="user-name">${escapeHtml(c.display_name)}</div>
-          <div class="user-sub">${c.is_group ? c.members.length + " Mitglieder" : "Direktnachricht"}</div>
+          <div class="user-sub">${escapeHtml(chatSubline(c))}</div>
         </div>
         <div class="notif-badge hidden" id="badge-${c.id}"></div>
       </div>
@@ -165,14 +186,42 @@ function renderMessage(msg) {
 }
 
 // ── Nachricht senden ──────────────────────────────────────
+// Prüft das clientseitige Ratelimit (gleitendes Fenster). Bei Überschreitung
+// bleibt der Text erhalten und es wird ein Hinweis angezeigt.
+function canSendNow() {
+  const now = Date.now();
+  while (sendTimes.length && now - sendTimes[0] > RATE_LIMIT_WINDOW) sendTimes.shift();
+  if (sendTimes.length >= RATE_LIMIT_MAX) return false;
+  sendTimes.push(now);
+  return true;
+}
+
 function sendMessage() {
   const text = msgInput.value.trim();
   if (!text || activeChatId === null) return;
+  if (!canSendNow()) {
+    showRateNotice();
+    return;   // Text bleibt im Eingabefeld erhalten
+  }
   socket.emit("send_message", { chat_id: activeChatId, content: text });
   msgInput.value = "";
   msgInput.style.height = "auto";
   msgInput.focus();
 }
+
+// Blendet kurz einen Hinweis ein, wenn zu schnell gesendet wird.
+let rateNoticeTimer = null;
+function showRateNotice(text = "Du sendest zu schnell. Bitte warte kurz.") {
+  const el = document.getElementById("rate-notice");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("hidden");
+  clearTimeout(rateNoticeTimer);
+  rateNoticeTimer = setTimeout(() => el.classList.add("hidden"), 2500);
+}
+
+// Server-seitige Ablehnung (falls der Client umgangen wurde).
+socket.on("rate_limited", (data) => showRateNotice(data && data.error));
 
 sendBtn.addEventListener("click", sendMessage);
 
@@ -191,6 +240,7 @@ msgInput.addEventListener("input", () => {
 
 // ── Eingehende Nachrichten (Echtzeit) ─────────────────────
 socket.on("new_message", (msg) => {
+  updateChatPreview(msg.chat_id, msg.content);   // Sidebar-Vorschau aktuell halten
   if (msg.chat_id === activeChatId) {
     renderMessage(msg);
     scrollToBottom();
@@ -510,7 +560,7 @@ async function loadRequests() {
             <div class="user-sub">${r.mutual_friends} gemeinsame Freunde</div>
           </div>
         </div>
-        ${r.intro_message ? `<div class="request-message">${escapeHtml(r.intro_message)}</div>` : ""}
+        ${r.intro_message ? `<div class="request-message">${escapeHtml(truncate(r.intro_message))}</div>` : ""}
         <div class="request-actions">
           <button class="btn-action btn-accept" data-accept="${r.id}">Annehmen</button>
           <button class="btn-action btn-decline" data-decline="${r.id}">Ablehnen</button>
@@ -555,6 +605,12 @@ function formatTime(iso) {
   return `${String(hours).padStart(2, "0")}:${minutes}`;
 }
 
+// Kürzt eine Zeichenkette für die Anzeige in Menüleisten (mit … am Ende).
+function truncate(str, max = PREVIEW_MAX) {
+  const s = String(str);
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
 function escapeHtml(str) {
   return String(str)
     .replaceAll("&", "&amp;")
@@ -571,7 +627,7 @@ function startEditMessage(msgId, chatId, currentContent, rowEl) {
   const bubble = rowEl.querySelector(".bubble");
 
   bubble.innerHTML = `
-    <textarea class="edit-input" maxlength="2000" rows="1"></textarea>
+    <textarea class="edit-input" maxlength="2048" rows="1"></textarea>
     <div class="edit-actions">
       <button class="btn-edit-cancel">Abbrechen</button>
       <button class="btn-edit-save">Speichern</button>

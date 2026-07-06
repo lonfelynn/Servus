@@ -219,6 +219,16 @@ body {
 }
 .input-row { display: flex; gap: 12px; align-items: flex-end; }
 
+.rate-notice {
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(255, 96, 96, 0.14);
+  color: #ff6060;
+  font-size: 13px;
+}
+.rate-notice.hidden { display: none; }
+
 .input-field {
   flex: 1;
   background: var(--input);

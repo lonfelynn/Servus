@@ -256,7 +256,11 @@ def get_user_chats(user_id: int):
                    array_agg(u.id       ORDER BY u.username) AS member_ids,
                    array_agg(u.username ORDER BY u.username) AS member_names,
                    (SELECT MAX(sent_at) FROM chat_messages m
-                     WHERE m.chat_id = c.id) AS last_at
+                     WHERE m.chat_id = c.id) AS last_at,
+                   (SELECT content FROM chat_messages m
+                     WHERE m.chat_id = c.id
+                     ORDER  BY m.sent_at DESC, m.id DESC
+                     LIMIT  1) AS last_message
             FROM   chats c
             JOIN   chat_members cm ON cm.chat_id = c.id
             JOIN   users u         ON u.id = cm.user_id
@@ -278,6 +282,7 @@ def get_user_chats(user_id: int):
                 "display_name": _display_name(row["name"], members, user_id),
                 "members": members,
                 "is_group": len(members) > 2,
+                "last_message": row["last_message"],
             })
         return chats
 
@@ -287,7 +292,17 @@ def get_chat(chat_id: int, viewer_id: int):
     or None if it does not exist."""
     with get_connection() as connection:
         cursor = connection.cursor()
-        cursor.execute("SELECT id, name FROM chats WHERE id = %s", (chat_id,))
+        cursor.execute(
+            """
+            SELECT c.id, c.name,
+                   (SELECT content FROM chat_messages m
+                     WHERE m.chat_id = c.id
+                     ORDER  BY m.sent_at DESC, m.id DESC
+                     LIMIT  1) AS last_message
+            FROM   chats c WHERE c.id = %s
+            """,
+            (chat_id,)
+        )
         chat = cursor.fetchone()
         if chat is None:
             return None
@@ -298,6 +313,7 @@ def get_chat(chat_id: int, viewer_id: int):
         "display_name": _display_name(chat["name"], members, viewer_id),
         "members": members,
         "is_group": len(members) > 2,
+        "last_message": chat["last_message"],
     }
 
 

@@ -1,6 +1,9 @@
 # app.py
 import os
+import time
 import atexit
+from collections import defaultdict, deque
+from threading import Lock
 from functools import wraps
 from flask import Flask, request, redirect, url_for, render_template, session, jsonify
 from flask_socketio import SocketIO, join_room, leave_room, emit
@@ -39,6 +42,30 @@ from models import (
 
 # Max length of the single intro message a requester may attach to a request.
 FRIEND_INTRO_MAX_LEN = 2048
+
+# Max length of a normal chat message.
+MESSAGE_MAX_LEN = 2048
+
+# Message rate limit: at most RATE_LIMIT_MAX messages per RATE_LIMIT_WINDOW seconds
+# per user. A simple in-memory sliding window — fine for a single-process server.
+RATE_LIMIT_MAX = 5
+RATE_LIMIT_WINDOW = 5.0
+_rate_lock = Lock()
+_send_times: "defaultdict[int, deque]" = defaultdict(deque)
+
+
+def _allow_message(user_id: int) -> bool:
+    """Sliding-window rate check. Returns False when the user has sent too many
+    messages within the window (and does not count the rejected attempt)."""
+    now = time.monotonic()
+    with _rate_lock:
+        times = _send_times[user_id]
+        while times and now - times[0] > RATE_LIMIT_WINDOW:
+            times.popleft()
+        if len(times) >= RATE_LIMIT_MAX:
+            return False
+        times.append(now)
+        return True
 
 # ── App setup ───────────────────────────────────────────────
 app = Flask(__name__)
@@ -189,8 +216,8 @@ def api_edit_message(chat_id, message_id):
     content = (data.get("content") or "").strip()
     if not content:
         return jsonify({"ok": False, "error": "Nachricht darf nicht leer sein."}), 400
-    if len(content) > 2000:
-        return jsonify({"ok": False, "error": "Nachricht zu lang."}), 400
+    if len(content) > MESSAGE_MAX_LEN:
+        return jsonify({"ok": False, "error": f"Nachricht darf höchstens {MESSAGE_MAX_LEN} Zeichen haben."}), 400
 
     updated = update_chat_message(message_id, me, content)
     if updated is None:
@@ -457,8 +484,17 @@ def on_send_message(data):
     if not content:
         return
 
+    # Reject over-long messages (the client also enforces this, but never trust it).
+    if len(content) > MESSAGE_MAX_LEN:
+        return
+
     # Only members may post to a chat.
     if not is_chat_member(chat_id, sender_id):
+        return
+
+    # Rate limit so a single user cannot flood a chat.
+    if not _allow_message(sender_id):
+        emit("rate_limited", {"error": "Du sendest zu schnell. Bitte warte kurz."})
         return
 
     message = save_chat_message(chat_id, sender_id, content)
