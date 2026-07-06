@@ -7,7 +7,8 @@ const socket = io();
 // Aktueller Chat + Caches
 let activeChatId = null;
 const chatsById = {};    // chat_id → Chat-Objekt (id, display_name, members, is_group)
-let allUsers = [];       // alle anderen Nutzer (für Kontaktliste + Mitglieder-Picker)
+let allUsers = [];       // alle anderen Nutzer (für Kontaktliste)
+let friends = [];        // akzeptierte Freunde (für die Gruppen-Mitglieder-Picker)
 const unreadByChat = {}; // chat_id → Anzahl ungelesener Nachrichten
 
 const chatListEl     = document.getElementById("chat-list");
@@ -35,10 +36,16 @@ async function loadMe() {
     `Level ${me.level} · ${me.xp} XP`;
 }
 
-// ── Alle Nutzer laden (nur für den Gruppen-Mitglieder-Picker) ─
+// ── Alle Nutzer laden (für die Kontaktliste) ─
 async function loadUsers() {
   const res = await fetch("/api/users");
   allUsers = await res.json();
+}
+
+// ── Freunde laden (für die Gruppen-Mitglieder-Picker) ─
+async function loadFriends() {
+  const res = await fetch("/api/friends");
+  friends = await res.json();
 }
 
 // ── Chat-Liste laden ──────────────────────────────────────
@@ -211,6 +218,7 @@ socket.on("chat_updated", async (data) => {
 socket.on("friend_request", () => loadRequests());
 socket.on("friend_update", () => {
   loadRequests();
+  loadFriends();   // Freundesliste für die Gruppen-Picker aktuell halten
   if (searchInputEl.value.trim()) runSearch();   // Status in der Suche aktualisieren
 });
 
@@ -250,12 +258,12 @@ const groupNameIn   = document.getElementById("group-name-input");
 
 document.getElementById("new-group-btn").addEventListener("click", () => {
   groupNameIn.value = "";
-  groupPicker.innerHTML = allUsers.map(u => `
+  groupPicker.innerHTML = friends.map(u => `
     <label class="picker-item">
       <input type="checkbox" value="${u.id}">
       <span>${escapeHtml(u.username)}</span>
     </label>
-  `).join("") || `<div class="empty-list">Keine anderen Nutzer.</div>`;
+  `).join("") || `<div class="empty-list">Du hast noch keine Freunde zum Hinzufügen.</div>`;
   groupModal.classList.remove("hidden");
 });
 
@@ -319,11 +327,11 @@ function renderManageMembers(chat) {
     btn.addEventListener("click", () => removeMember(Number(btn.dataset.id)));
   });
 
-  // Nutzer, die noch nicht Mitglied sind, zum Hinzufügen anbieten
-  const addable = allUsers.filter(u => !memberIds.has(u.id));
+  // Freunde, die noch nicht Mitglied sind, zum Hinzufügen anbieten
+  const addable = friends.filter(u => !memberIds.has(u.id));
   addPickerEl.innerHTML = addable.map(u => `
     <button class="btn-add" data-id="${u.id}">＋ ${escapeHtml(u.username)}</button>
-  `).join("") || `<div class="empty-list">Alle Nutzer sind bereits dabei.</div>`;
+  `).join("") || `<div class="empty-list">Alle deine Freunde sind bereits dabei.</div>`;
 
   addPickerEl.querySelectorAll(".btn-add").forEach(btn => {
     btn.addEventListener("click", () => addMember(Number(btn.dataset.id)));
@@ -355,6 +363,12 @@ async function addMember(userId) {
 
 async function removeMember(userId) {
   const chatId = activeChatId;
+  // Das Verlassen einer Gruppe muss bestätigt werden.
+  if (userId === ME) {
+    const chat = chatsById[chatId];
+    const label = chat && chat.is_group ? "diese Gruppe" : "diesen Chat";
+    if (!confirm(`Möchtest du ${label} wirklich verlassen?`)) return;
+  }
   await fetch(`/api/chats/${chatId}/members/${userId}`, { method: "DELETE" });
   // Sich selbst entfernt → Chat wird über chat_removed geschlossen.
   if (userId === ME) {
@@ -700,6 +714,7 @@ async function markChatRead(chatId, force = false) {
 async function init() {
   loadMe();
   await loadUsers();   // muss vor loadChats/Pickern stehen (allUsers befüllen)
+  await loadFriends(); // Freunde für die Gruppen-Picker
   await loadChats();
   loadNotifications();
   loadRequests();

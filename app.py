@@ -28,6 +28,8 @@ from models import (
     delete_chat_message,
     are_friends,
     get_friendship,
+    get_friend_ids,
+    get_friends,
     search_users,
     create_friend_request,
     get_incoming_requests,
@@ -113,6 +115,13 @@ def api_users():
     return jsonify([dict(u) for u in users])
 
 
+@app.route("/api/friends")
+@login_required
+def api_friends():
+    """The current user's accepted friends — used to fill the group-member pickers."""
+    return jsonify([dict(u) for u in get_friends(session["user_id"])])
+
+
 # ── Chats API ───────────────────────────────────────────────
 @app.route("/api/chats")
 @login_required
@@ -141,12 +150,14 @@ def api_create_chat():
     if len(member_ids) < 2:
         return jsonify({"ok": False, "error": "Ein Chat braucht mindestens zwei Mitglieder."}), 400
 
-    # A 1-on-1 chat may only be opened between accepted friends. Group chats
-    # (3+ members) are not friend-gated.
-    if len(member_ids) == 2:
-        other = next(uid for uid in member_ids if uid != me)
-        if not are_friends(me, other):
+    # You may only chat with accepted friends: a 1-on-1 needs the other person to
+    # be a friend, a group may only be created from your friends.
+    others = member_ids - {me}
+    non_friends = others - get_friend_ids(me)
+    if non_friends:
+        if len(member_ids) == 2:
             return jsonify({"ok": False, "error": "Ihr müsst befreundet sein, um direkt zu chatten."}), 403
+        return jsonify({"ok": False, "error": "Du kannst nur Freunde zu einer Gruppe hinzufügen."}), 403
 
     name = (data.get("name") or "").strip() or None
     chat_id = find_or_create_chat(member_ids, created_by=me, name=name)
@@ -348,6 +359,10 @@ def api_add_member(chat_id):
         new_id = int(data.get("user_id"))
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "Ungültiger Nutzer."}), 400
+
+    # Only friends of the person doing the adding may be pulled into the group.
+    if not are_friends(me, new_id):
+        return jsonify({"ok": False, "error": "Du kannst nur Freunde zur Gruppe hinzufügen."}), 403
 
     add_chat_member(chat_id, new_id)
     # Notify all members (incl. the new one) so they join/refresh the chat.

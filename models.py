@@ -487,6 +487,27 @@ def get_friend_ids(user_id: int):
         return {row["fid"] for row in cursor.fetchall()}
 
 
+def get_friends(user_id: int):
+    """Returns the accepted friends of `user_id` as user rows (id, username, level),
+    ordered by username. Used to populate the group-member pickers."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT u.id, u.username, u.level
+            FROM   friendships f
+            JOIN   users u
+              ON   u.id = CASE WHEN f.requester_id = %s
+                               THEN f.addressee_id ELSE f.requester_id END
+            WHERE  f.status = 'accepted'
+              AND  (f.requester_id = %s OR f.addressee_id = %s)
+            ORDER  BY u.username
+            """,
+            (user_id, user_id, user_id)
+        )
+        return cursor.fetchall()
+
+
 def get_friendship(a: int, b: int):
     """Returns the friendship row between two users (either direction) or None."""
     with get_connection() as connection:
