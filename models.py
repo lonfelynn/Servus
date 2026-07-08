@@ -678,3 +678,28 @@ def delete_friend_request(request_id: int, user_id: int):
             (request_id, user_id, user_id)
         )
         return cursor.fetchone()
+
+
+def remove_friend(user_id: int, friend_id: int):
+    """Ends an accepted friendship between `user_id` and `friend_id` (either
+    direction may hold requester/addressee). Returns the deleted row
+    (requester_id, addressee_id) or None if the two were not friends.
+
+    This only deletes the friendship record — any existing 1-on-1 chat and
+    its message history are left untouched, they just can no longer be used
+    to start a *new* chat/group together (see `are_friends` checks in app.py).
+    """
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            DELETE FROM friendships
+            WHERE  status = 'accepted'
+               AND ((requester_id = %s AND addressee_id = %s)
+                 OR (requester_id = %s AND addressee_id = %s))
+            RETURNING requester_id, addressee_id
+            """,
+            (user_id, friend_id, friend_id, user_id)
+        )
+        return cursor.fetchone()
+
