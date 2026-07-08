@@ -47,7 +47,7 @@ if (fileInput) {
     const file = e.target.files[0];
     if (file) {
       selectedFile = file;
-      filePreview.innerHTML = `<span>📎 ${escapeHtml(file.name)}</span> <button class="icon-btn" style="font-size: 0.8rem; padding: 2px;" onclick="clearFile()">✕</button>`;
+      filePreview.innerHTML = `<span class="file-chip">${ICONS.attach} ${escapeHtml(file.name)}</span> <button class="icon-btn" style="padding: 2px;" onclick="clearFile()">${ICONS.close}</button>`;
       filePreview.classList.remove("hidden");
     }
   });
@@ -98,7 +98,7 @@ function renderFriendsList() {
     <div class="friend-row" data-id="${f.id}">
       <div class="avatar">${escapeHtml(f.username.charAt(0))}</div>
       <div class="friend-row-name">${escapeHtml(f.username)}</div>
-      <button class="btn-remove" data-id="${f.id}" data-name="${escapeHtml(f.username)}" title="Freundschaft beenden">✕</button>
+      <button class="btn-remove" data-id="${f.id}" data-name="${escapeHtml(f.username)}" title="Freundschaft beenden">${ICONS.close}</button>
     </div>
   `).join("");
 
@@ -259,16 +259,16 @@ function renderMessage(msg) {
       } else if (msg.file_type === "video") {
          bubbleContent += `${br}<video src="${escapeHtml(msg.file_url)}" controls style="max-width: 100%; border-radius: 8px; margin-top: 5px;"></video>`;
       } else {
-         bubbleContent += `${br}<a href="${escapeHtml(msg.file_url)}" target="_blank" style="color: inherit; text-decoration: underline;">📎 ${escapeHtml(msg.file_name || "Download")}</a>`;
+         bubbleContent += `${br}<a href="${escapeHtml(msg.file_url)}" target="_blank" class="file-link" style="color: inherit; text-decoration: underline;">${ICONS.attach} ${escapeHtml(msg.file_name || "Download")}</a>`;
       }
     }
   }
   let readStatusHtml = "";
   if (mine && !msg.is_deleted) {
       if (msg.read_count >= msg.expected_read_count && msg.expected_read_count > 0) {
-          readStatusHtml = `<span class="read-status" style="margin-left: 5px; font-size: 0.8rem; color: #4CAF50;">✓✓</span>`;
+          readStatusHtml = `<span class="read-status read" style="margin-left: 5px; color: #4CAF50;">${ICONS.checkDouble}</span>`;
       } else {
-          readStatusHtml = `<span class="read-status" style="margin-left: 5px; font-size: 0.8rem; opacity: 0.6;">✓</span>`;
+          readStatusHtml = `<span class="read-status" style="margin-left: 5px; opacity: 0.6;">${ICONS.check}</span>`;
       }
   }
   
@@ -280,8 +280,8 @@ function renderMessage(msg) {
     <div class="time">${formatTime(msg.sent_at)}${readStatusHtml}</div>
     ${(mine && !msg.is_deleted) ? `
     <div class="msg-actions">
-      <button class="msg-btn msg-edit-btn"   title="Bearbeiten">✎</button>
-      <button class="msg-btn msg-delete-btn" title="Löschen">✕</button>
+      <button class="msg-btn msg-edit-btn"   title="Bearbeiten">${ICONS.edit}</button>
+      <button class="msg-btn msg-delete-btn" title="Löschen">${ICONS.trash}</button>
     </div>` : ""}
   `;
 
@@ -524,7 +524,7 @@ function renderManageMembers() {
   memberListEl.innerHTML = members.map(m => `
     <div class="member-row">
       <span>${escapeHtml(m.username)}${m.id === ME ? " (du)" : ""}</span>
-      <button class="btn-remove" data-id="${m.id}" title="Entfernen">✕</button>
+      <button class="btn-remove" data-id="${m.id}" title="Entfernen">${ICONS.close}</button>
     </div>
   `).join("");
 
@@ -535,7 +535,7 @@ function renderManageMembers() {
   // Freunde, die noch nicht Mitglied sind, zum Hinzufügen anbieten
   const addable = friends.filter(u => !memberIds.has(u.id));
   addPickerEl.innerHTML = addable.map(u => `
-    <button class="btn-add" data-id="${u.id}">＋ ${escapeHtml(u.username)}</button>
+    <button class="btn-add" data-id="${u.id}">${ICONS.plus} ${escapeHtml(u.username)}</button>
   `).join("") || `<div class="empty-list">Alle deine Freunde sind bereits dabei.</div>`;
 
   addPickerEl.querySelectorAll(".btn-add").forEach(btn => {
@@ -572,7 +572,7 @@ document.getElementById("manage-save-btn").addEventListener("click", async () =>
       }));
     }
   }
-  // Entfernte Mitglieder (sich selbst wird separat über den ✕-Button behandelt).
+  // Entfernte Mitglieder (sich selbst wird separat über den Entfernen-Button behandelt).
   for (const m of chat.members) {
     if (m.id !== ME && !draftIds.has(m.id)) {
       tasks.push(fetch(`/api/chats/${chatId}/members/${m.id}`, { method: "DELETE" }));
@@ -915,7 +915,8 @@ socket.on("message_deleted", (data) => {
 socket.on("message_read", (data) => {
   if (data.chat_id === activeChatId) {
      messagesEl.querySelectorAll(".read-status").forEach(el => {
-         el.textContent = "✓✓";
+         el.innerHTML = ICONS.checkDouble;
+         el.classList.add("read");
          el.style.color = "#4CAF50";
          el.style.opacity = "1";
      });

@@ -113,8 +113,65 @@ body {
   transition: .15s;
   flex-shrink: 0;
   touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* ─── SVG-Icon-System (ersetzt die früheren Emoji/Unicode-Zeichen) ─── */
+svg.icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+.icon-btn svg.icon { width: 18px; height: 18px; }
+.send-btn svg.icon { width: 20px; height: 20px; }
+.back-btn svg.icon { width: 20px; height: 20px; }
+.msg-btn svg.icon { width: 15px; height: 15px; }
+.btn-remove svg.icon { width: 15px; height: 15px; }
+.btn-add svg.icon { width: 13px; height: 13px; }
+
+/* Buttons mit Text + Icon zentrieren ihren Inhalt sauber. */
+.msg-btn,
+.btn-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Lese-Status (Häkchen) unter eigenen Nachrichten. */
+.read-status { display: inline-flex; vertical-align: middle; }
+.read-status svg.icon { width: 15px; height: 15px; }
+
+/* Datei-Anhang: Büroklammer-Icon vor dem Dateinamen ausrichten. */
+.file-chip,
+.file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.file-chip svg.icon,
+.file-link svg.icon { width: 15px; height: 15px; }
+
+/* Label mit vorangestelltem Icon (Einstellungen-Modal). */
+.modal-label-icon {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.modal-label-icon svg.icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
 
 .list-title {
   font-size: 12px;
@@ -282,6 +339,9 @@ body {
   flex-shrink: 0;
   transition: .2s;
   touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .send-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(92, 111, 255, .3); }
 .send-btn:active { transform: translateY(0); }
