@@ -383,6 +383,27 @@ def api_friend_decline(request_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/friends/<int:friend_id>", methods=["DELETE"])
+@login_required
+def api_remove_friend(friend_id):
+    """Ends an accepted friendship. Either side may remove the other; any
+    existing 1-on-1 chat and its message history stay intact, but the two
+    users can no longer be added to new chats/groups together until they
+    become friends again."""
+    me = session["user_id"]
+    if friend_id == me:
+        return jsonify({"ok": False, "error": "Ungültiger Nutzer."}), 400
+
+    row = remove_friend(me, friend_id)
+    if row is None:
+        return jsonify({"ok": False, "error": "Ihr seid nicht befreundet."}), 400
+
+    # Refresh both users' friend lists / search results live.
+    for uid in (row["requester_id"], row["addressee_id"]):
+        socketio.emit("friend_update", {}, room=f"user_{uid}")
+    return jsonify({"ok": True})
+    
+
 @app.route("/api/chats/<int:chat_id>/members", methods=["POST"])
 @login_required
 def api_add_member(chat_id):
