@@ -377,27 +377,30 @@ def rename_chat(chat_id: int, name: "str | None"):
         )
 
 
-def save_chat_message(chat_id: int, sender_id: int, content: str):
+def save_chat_message(chat_id: int, sender_id: int, content: str, file_url: "str | None" = None, file_type: "str | None" = None, file_name: "str | None" = None):
     """Stores a chat message and returns the created row."""
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
-            "INSERT INTO chat_messages (chat_id, sender_id, content) "
-            "VALUES (%s, %s, %s) "
-            "RETURNING id, chat_id, sender_id, content, sent_at",
-            (chat_id, sender_id, content)
+            "INSERT INTO chat_messages (chat_id, sender_id, content, file_url, file_type, file_name) "
+            "VALUES (%s, %s, %s, %s, %s, %s) "
+            "RETURNING id, chat_id, sender_id, content, sent_at, file_url, file_type, file_name, edited_at, is_deleted",
+            (chat_id, sender_id, content, file_url, file_type, file_name)
         )
         return cursor.fetchone()
 
 
 def get_chat_conversation(chat_id: int):
-    """Returns all messages in a chat, oldest first, incl. the sender's name."""
+    """Returns all messages in a chat, oldest first, incl. the sender's name and read status."""
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
             """
             SELECT m.id, m.chat_id, m.sender_id, m.content, m.sent_at, m.edited_at, m.is_deleted,
-                   u.username AS sender_name
+                    m.file_url, m.file_type, m.file_name,
+                   u.username AS sender_name,
+                   (SELECT COUNT(*) FROM chat_notifications cn WHERE cn.message_id = m.id AND cn.is_read = TRUE) AS read_count,
+                   (SELECT COUNT(*) FROM chat_members cm WHERE cm.chat_id = m.chat_id) - 1 AS expected_read_count
             FROM   chat_messages m
             JOIN   users u ON u.id = m.sender_id
             WHERE  m.chat_id = %s
@@ -466,7 +469,7 @@ def update_chat_message(message_id: int, sender_id: int, new_content: str):
                    edited_at = NOW()
             WHERE  id        = %s
               AND  sender_id = %s
-            RETURNING id, chat_id, sender_id, content, sent_at, edited_at, is_deleted
+            RETURNING id, chat_id, sender_id, content, sent_at, edited_at, is_deleted, file_url, file_type, file_name
             """,
             (new_content, message_id, sender_id)
         )
