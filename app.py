@@ -39,6 +39,7 @@ from models import (
     get_incoming_requests,
     accept_friend_request,
     delete_friend_request,
+    remove_friend,
 )
 
 # Max length of the single intro message a requester may attach to a request.
