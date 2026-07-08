@@ -25,6 +25,7 @@ const searchInputEl  = document.getElementById("search-input");
 const searchResultsEl = document.getElementById("search-results");
 const requestsListEl = document.getElementById("requests-list");
 const requestsBadge  = document.getElementById("requests-badge");
+const friendsListEl  = document.getElementById("friends-list");
 const messagesEl   = document.getElementById("messages");
 const placeholder  = document.getElementById("chat-placeholder");
 const chatView     = document.getElementById("chat-view");
