@@ -54,6 +54,33 @@ def get_user_by_id(user_id: int):
         return cursor.fetchone()
 
 
+# Profile/settings columns a user is allowed to update (added in sql/7.sql).
+_PROFILE_COLUMNS = ("status_text", "presence", "avatar_url", "accent_color", "theme_mode")
+
+
+def update_user_profile(user_id: int, **fields):
+    """Updates the given profile/settings columns for a user.
+
+    Only whitelisted columns in `_PROFILE_COLUMNS` are written, and only those
+    passed with a non-None value — so callers can send just the fields that
+    changed. Returns the updated row (or the current row if nothing changed).
+    """
+    updates = [(col, val) for col, val in fields.items()
+               if col in _PROFILE_COLUMNS and val is not None]
+    if not updates:
+        return get_user_by_id(user_id)
+
+    set_clause = ", ".join(f"{col} = %s" for col, _ in updates)
+    params = [val for _, val in updates]
+    params.append(user_id)
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            f"UPDATE users SET {set_clause} WHERE id = %s RETURNING *", params
+        )
+        return cursor.fetchone()
+
+
 def get_all_users(exclude_id: "int | None" = None):
     """Returns all users (id, username, level, xp), optionally excluding one id."""
     with get_connection() as connection:

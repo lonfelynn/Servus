@@ -6,10 +6,25 @@
   --border: #1f2330;
   --accent: #5c6fff;
   --text: #e8eaf2;
-  --muted: #6b7080;
+  --muted: #8b92a4; /* heller als zuvor (#6b7080) für bessere Lesbarkeit */
   --input: #1a1d27;
   --radius: 16px;
   --sidebar-width: 320px;
+}
+
+/* Heller Modus – wird über theme.js per .light-mode am <html> aktiviert. */
+:root.light-mode {
+  --bg: #f8f9fa;
+  --panel: #ffffff;
+  --border: #e5e7eb;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --input: #f3f4f6;
+}
+
+/* Benutzerdefinierte Akzentfarbe – theme.js setzt data-accent + --user-accent. */
+:root[data-accent] {
+  --accent: var(--user-accent, #5c6fff);
 }
 
 body {
@@ -642,7 +657,7 @@ body {
 
 /* ─── Freundesliste ─── */
 .friends-list {
-  flex: 1;
+  max-height: 30%;
   min-height: 0;
   overflow-y: auto;
   padding: 0 10px 10px;

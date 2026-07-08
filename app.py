@@ -13,6 +13,7 @@ from auth import auth_bp
 from models import (
     get_all_users,
     get_user_by_id,
+    update_user_profile,
     add_message_xp,
     find_or_create_chat,
     get_user_chats,
@@ -133,15 +134,40 @@ def chat():
 
 
 # ── JSON API ────────────────────────────────────────────────
-@app.route("/api/me")
+_ALLOWED_PRESENCE = {"online", "away", "busy", "offline"}
+
+
+@app.route("/api/me", methods=["GET", "PATCH"])
 @login_required
 def api_me():
-    user = get_user_by_id(session["user_id"])
+    if request.method == "PATCH":
+        data = request.get_json(silent=True) or {}
+        presence = data.get("presence")
+        if presence is not None and presence not in _ALLOWED_PRESENCE:
+            presence = None  # ignore invalid values rather than store garbage
+        status_text = data.get("status_text")
+        if isinstance(status_text, str):
+            status_text = status_text[:128]  # match the client-side max length
+        user = update_user_profile(
+            session["user_id"],
+            status_text=status_text,
+            presence=presence,
+            avatar_url=data.get("avatar_url"),
+        )
+    else:
+        user = get_user_by_id(session["user_id"])
+
+    # Never expose the password hash — return only the safe, UI-relevant fields.
     return jsonify({
         "id": user["id"],
         "username": user["username"],
         "level": user["level"],
         "xp": user["xp"],
+        "avatar_url": user.get("avatar_url"),
+        "status_text": user.get("status_text"),
+        "presence": user.get("presence"),
+        "accent_color": user.get("accent_color"),
+        "theme_mode": user.get("theme_mode"),
     })
 
 

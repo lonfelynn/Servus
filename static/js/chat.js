@@ -56,6 +56,7 @@ async function loadUsers() {
 async function loadFriends() {
   const res = await fetch("/api/friends");
   friends = await res.json();
+  renderFriendsList();
 }
 
 // Rendert die „Freunde"-Sektion in der Sidebar mit Entfernen-Button je Freund.
@@ -79,6 +80,39 @@ function renderFriendsList() {
     btn.addEventListener("click", () => openRemoveFriendModal(Number(btn.dataset.id), btn.dataset.name));
   });
 }
+
+// ── Freund entfernen (Bestätigungs-Modal) ──────────────────
+const removeFriendModal = document.getElementById("remove-friend-modal");
+const removeFriendText  = document.getElementById("remove-friend-text");
+let pendingRemoveFriendId = null;
+
+function openRemoveFriendModal(friendId, friendName) {
+  pendingRemoveFriendId = friendId;
+  removeFriendText.textContent =
+    `Möchtest du die Freundschaft mit ${friendName} wirklich beenden?`;
+  removeFriendModal.classList.remove("hidden");
+}
+
+function closeRemoveFriendModal() {
+  pendingRemoveFriendId = null;
+  removeFriendModal.classList.add("hidden");
+}
+
+document.getElementById("remove-friend-cancel-btn")
+  .addEventListener("click", closeRemoveFriendModal);
+
+document.getElementById("remove-friend-confirm-btn")
+  .addEventListener("click", async () => {
+    if (pendingRemoveFriendId === null) return;
+    await fetch(`/api/friends/${pendingRemoveFriendId}`, { method: "DELETE" });
+    closeRemoveFriendModal();
+    await loadFriends();   // Freundesliste neu rendern
+    await loadChats();     // ein gemeinsamer 1:1-Chat verschwindet ggf.
+  });
+
+removeFriendModal.addEventListener("click", (e) => {
+  if (e.target === removeFriendModal) closeRemoveFriendModal();
+});
 
 // Unterzeile eines Chat-Eintrags: gekürzte letzte Nachricht, sonst Fallback.
 function chatSubline(chat) {
@@ -636,6 +670,7 @@ async function acceptRequest(requestId) {
   const data = await res.json();
   if (!data.ok) return;
   await loadRequests();
+  await loadFriends();   // neuer Freund erscheint sofort in der Freundesliste
   if (data.chat) {
     socket.emit("join_chat", { chat_id: data.chat.id });
     await loadChats();

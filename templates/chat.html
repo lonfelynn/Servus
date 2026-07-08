@@ -15,32 +15,36 @@
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-top">
-      <div class="logo-icon">💬</div>
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Servus"
+           class="logo-icon" style="object-fit: contain;" />
       <div class="logo-text">Servus</div>
     </div>
 
     <div class="me-bar">
-      <div class="avatar" id="me-avatar"></div>
+      <div class="avatar" id="me-avatar" style="cursor: pointer;" title="Profil bearbeiten"></div>
       <div class="me-info">
         <div class="me-name" id="me-name"></div>
         <div class="me-level" id="me-level">Level 1</div>
       </div>
+      <button class="icon-btn" id="settings-btn" title="Einstellungen">⚙</button>
       <button class="icon-btn" id="logout-btn" title="Abmelden">⎋</button>
     </div>
 
     <div class="list-header">
       <div class="list-title">Chats</div>
       <button class="icon-btn" id="new-group-btn" title="Neue Gruppe">＋</button>
+      <button class="icon-btn" id="requests-btn" title="Anfragen" style="position: relative;">
+        ✉
+        <div class="notif-badge hidden" id="requests-badge"
+             style="position: absolute; top: -4px; right: -4px;"></div>
+      </button>
     </div>
     <div class="chat-list" id="chat-list">
       <div class="empty-list">Lade Chats…</div>
     </div>
 
-    <div class="list-header" id="requests-header">
-      <div class="list-title">Anfragen</div>
-      <div class="notif-badge hidden" id="requests-badge"></div>
-    </div>
-    <div class="requests-list" id="requests-list"></div>
+    <div class="list-title">Freunde</div>
+    <div class="friends-list" id="friends-list"></div>
 
     <div class="list-title">Nutzer suchen</div>
     <div class="search-box">
@@ -50,10 +54,21 @@
     <div class="search-results" id="search-results"></div>
   </aside>
 
+  <!-- Anfragen-Seitenleiste (standardmäßig ausgeblendet) -->
+  <aside class="sidebar hidden" id="requests-sidebar" style="display: none;">
+    <div class="sidebar-top">
+      <button class="icon-btn" id="back-to-chats-btn" title="Zurück"
+              style="width: 100%; justify-content: center;">←</button>
+    </div>
+    <div class="list-title" style="padding: 16px 20px 8px;">Anfragen</div>
+    <div class="requests-list" id="requests-list"></div>
+  </aside>
+
    <!-- Chat -->
   <main class="chat-panel" id="chat-main">
     <div id="chat-placeholder" class="placeholder">
-      <div class="big">💬</div>
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Servus"
+           class="big" style="width: 80px; height: 80px; object-fit: contain; border-radius: 16px;" />
       <p>Wähle links einen Kontakt aus, um zu chatten.</p>
     </div>
 
@@ -144,12 +159,64 @@
   </div>
 </div>
 
+<!-- Modal: Profil bearbeiten -->
+<div class="modal-overlay hidden" id="profile-modal">
+  <div class="modal">
+    <div class="modal-title">Profil bearbeiten</div>
+    <div class="modal-label">Profilbild</div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <div class="avatar" id="profile-avatar" style="width: 60px; height: 60px; font-size: 24px;"></div>
+      <input type="file" id="profile-image-input" accept="image/*" style="display: none;" />
+      <button class="btn btn-primary" id="upload-avatar-btn" style="flex: 1;">Bild hochladen</button>
+    </div>
+    <div class="modal-label" style="margin-top: 16px;">Statustext</div>
+    <textarea id="profile-status-input" class="modal-input" rows="2" maxlength="128"
+              placeholder="Mein Status…"></textarea>
+    <div class="modal-label" style="margin-top: 16px;">Status</div>
+    <select id="profile-presence-input" class="modal-input" style="cursor: pointer;">
+      <option value="online">🟢 Online</option>
+      <option value="away">🟡 Abwesend</option>
+      <option value="busy">🔴 Beschäftigt</option>
+      <option value="offline">⚫ Offline</option>
+    </select>
+    <div class="modal-actions" style="margin-top: 16px;">
+      <button class="btn btn-ghost" id="profile-cancel-btn">Abbrechen</button>
+      <button class="btn btn-primary" id="profile-save-btn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Einstellungen -->
+<div class="modal-overlay hidden" id="settings-modal">
+  <div class="modal">
+    <div class="modal-title">Einstellungen</div>
+    <div class="modal-label">Design</div>
+    <select id="theme-select" class="modal-input" style="cursor: pointer;">
+      <option value="dark">🌙 Dunkel</option>
+      <option value="light">☀️ Hell</option>
+    </select>
+    <div class="modal-label" style="margin-top: 16px;">Akzentfarbe</div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      <input type="color" id="accent-color-picker" class="modal-input"
+             style="width: 60px; height: 40px; padding: 4px; cursor: pointer;" />
+      <div id="accent-preview"
+           style="width: 60px; height: 40px; border-radius: 12px; border: 2px solid var(--border); background: var(--accent);"></div>
+    </div>
+    <div class="modal-actions" style="margin-top: 16px;">
+      <button class="btn btn-ghost" id="settings-close-btn">Schließen</button>
+    </div>
+  </div>
+</div>
+
 <!-- Server-Werte für das Script bereitstellen -->
 <script>
   window.SERVUS = { me: {{ user_id }}, myName: {{ username | tojson }} };
 </script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
 
 <!-- Mobile Navigation: Sidebar ↔ Chat wechseln -->
 <script>
