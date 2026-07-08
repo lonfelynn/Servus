@@ -58,6 +58,28 @@ async function loadFriends() {
   friends = await res.json();
 }
 
+// Rendert die „Freunde"-Sektion in der Sidebar mit Entfernen-Button je Freund.
+function renderFriendsList() {
+  if (!friendsListEl) return;
+
+  if (friends.length === 0) {
+    friendsListEl.innerHTML = `<div class="empty-list">Noch keine Freunde.</div>`;
+    return;
+  }
+
+  friendsListEl.innerHTML = friends.map(f => `
+    <div class="friend-row" data-id="${f.id}">
+      <div class="avatar">${escapeHtml(f.username.charAt(0))}</div>
+      <div class="friend-row-name">${escapeHtml(f.username)}</div>
+      <button class="btn-remove" data-id="${f.id}" data-name="${escapeHtml(f.username)}" title="Freundschaft beenden">✕</button>
+    </div>
+  `).join("");
+
+  friendsListEl.querySelectorAll(".btn-remove").forEach(btn => {
+    btn.addEventListener("click", () => openRemoveFriendModal(Number(btn.dataset.id), btn.dataset.name));
+  });
+}
+
 // Unterzeile eines Chat-Eintrags: gekürzte letzte Nachricht, sonst Fallback.
 function chatSubline(chat) {
   if (chat.last_message) return truncate(chat.last_message, SIDEBAR_PREVIEW_MAX);
