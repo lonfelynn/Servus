@@ -2,6 +2,7 @@
 import os
 import time
 import atexit
+from datetime import timedelta
 from collections import defaultdict, deque
 from threading import Lock
 from functools import wraps
@@ -70,6 +71,13 @@ def _allow_message(user_id: int) -> bool:
 # ── App setup ───────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-in-production")
+
+# Keep users logged in across browser restarts: mark sessions permanent (see
+# auth.login) so Flask writes a cookie with an explicit expiry instead of a
+# session cookie that dies when the browser closes. The lifetime is refreshed on
+# every request (SESSION_REFRESH_EACH_REQUEST defaults to True), so an active
+# user stays logged in as long as they visit at least once within the window.
+app.permanent_session_lifetime = timedelta(days=30)
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 

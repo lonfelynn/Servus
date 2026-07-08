@@ -46,6 +46,10 @@ def login():
         if user is None or not check_password(password, user["password_hash"]):
             return jsonify({"ok": False, "error": "Ungültiger Benutzername oder Passwort."})
 
+        # Make the session permanent so the login cookie survives a browser
+        # restart (uses app.permanent_session_lifetime, set in app.py) instead
+        # of expiring as a session cookie.
+        session.permanent = True
         session["user_id"]  = user["id"]
         session["username"] = user["username"]
 
