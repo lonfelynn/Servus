@@ -492,6 +492,39 @@ function removeMember(userId) {
 }
 
 // ════════════════════════════════════════════════════════════
+// ── Modal: Freundschaft beenden (Bestätigung) ──────────────
+// ════════════════════════════════════════════════════════════
+const removeFriendModal   = document.getElementById("remove-friend-modal");
+const removeFriendTextEl  = document.getElementById("remove-friend-text");
+let removeFriendTargetId  = null;
+
+function openRemoveFriendModal(friendId, friendName) {
+  removeFriendTargetId = friendId;
+  removeFriendTextEl.textContent =
+    `Möchtest du ${friendName} wirklich aus deiner Freundesliste entfernen?`;
+  removeFriendModal.classList.remove("hidden");
+}
+
+document.getElementById("remove-friend-cancel-btn").addEventListener("click", () => {
+  removeFriendModal.classList.add("hidden");
+  removeFriendTargetId = null;
+});
+
+document.getElementById("remove-friend-confirm-btn").addEventListener("click", async () => {
+  if (removeFriendTargetId === null) return;
+  const res = await fetch(`/api/friends/${removeFriendTargetId}`, { method: "DELETE" });
+  const data = await res.json();
+  removeFriendModal.classList.add("hidden");
+  if (!data.ok) {
+    alert(data.error || "Freundschaft konnte nicht beendet werden.");
+  } else {
+    await loadFriends();               // eigene Freundesliste + Gruppen-Picker aktualisieren
+    if (searchInputEl.value.trim()) runSearch();   // Status in der Suche aktualisieren
+  }
+  removeFriendTargetId = null;
+});
+
+// ════════════════════════════════════════════════════════════
 // ── Nutzersuche ────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
 let searchTimer = null;
