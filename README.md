@@ -1,8 +1,14 @@
+<div align="center">
+
+<img src="/static/img/logo.png" height="100" alt="Servus logo" style="margin-top: 1rem; border-radius: 0.25rem;">
+   
 # Servus
 
 Ein bayerisches Schulprojekt. Endlich ein Messenger von Schülern für Schüler.
 
 https://servus.klappstuhl.me
+
+</div>
 
 ## Funktionen (Basis)
 
