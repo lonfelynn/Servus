@@ -34,6 +34,32 @@ const peerSubEl    = document.getElementById("peer-sub");
 const peerAvatarEl = document.getElementById("peer-avatar");
 const msgInput     = document.getElementById("msg-input");
 const sendBtn      = document.getElementById("send-btn");
+const fileInput    = document.getElementById("file-input");
+const attachBtn    = document.getElementById("attach-btn");
+const filePreview  = document.getElementById("file-preview");
+
+let selectedFile = null;
+if (attachBtn) {
+  attachBtn.addEventListener("click", () => fileInput.click());
+}
+if (fileInput) {
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      selectedFile = file;
+      filePreview.innerHTML = `<span>📎 ${escapeHtml(file.name)}</span> <button class="icon-btn" style="font-size: 0.8rem; padding: 2px;" onclick="clearFile()">✕</button>`;
+      filePreview.classList.remove("hidden");
+    }
+  });
+}
+window.clearFile = function() {
+  selectedFile = null;
+  if (fileInput) fileInput.value = "";
+  if (filePreview) {
+    filePreview.innerHTML = "";
+    filePreview.classList.add("hidden");
+  }
+}
 
 // ── Eigenes Profil anzeigen ───────────────────────────────
 document.getElementById("me-name").textContent = MY_NAME;
@@ -181,14 +207,37 @@ function renderMessage(msg) {
   row.dataset.id     = msg.id;
   row.dataset.chatId = msg.chat_id;
 
-  const bubbleClass = msg.is_deleted ? "bubble is-deleted" : "bubble";
-  const bubbleContent = msg.is_deleted ? "Diese Nachricht wurde gelöscht." : escapeHtml(msg.content);
+  const bubbleClass = "bubble";
+  let bubbleContent = "";
+  
+  if (!msg.is_deleted) {
+    bubbleContent = escapeHtml(msg.content);
+    if (msg.file_url) {
+      const br = msg.content ? "<br>" : "";
+      if (msg.file_type === "image") {
+         bubbleContent += `${br}<img src="${escapeHtml(msg.file_url)}" alt="Attachment" style="max-width: 100%; border-radius: 8px; margin-top: 5px;">`;
+      } else if (msg.file_type === "video") {
+         bubbleContent += `${br}<video src="${escapeHtml(msg.file_url)}" controls style="max-width: 100%; border-radius: 8px; margin-top: 5px;"></video>`;
+      } else {
+         bubbleContent += `${br}<a href="${escapeHtml(msg.file_url)}" target="_blank" style="color: inherit; text-decoration: underline;">📎 ${escapeHtml(msg.file_name || "Download")}</a>`;
+      }
+    }
+  }
+  let readStatusHtml = "";
+  if (mine && !msg.is_deleted) {
+      if (msg.read_count >= msg.expected_read_count && msg.expected_read_count > 0) {
+          readStatusHtml = `<span class="read-status" style="margin-left: 5px; font-size: 0.8rem; color: #4CAF50;">✓✓</span>`;
+      } else {
+          readStatusHtml = `<span class="read-status" style="margin-left: 5px; font-size: 0.8rem; opacity: 0.6;">✓</span>`;
+      }
+  }
+  
   
   row.innerHTML = `
     ${showSender ? `<div class="sender">${escapeHtml(msg.sender_name || "")}</div>` : ""}
-    <div class="${bubbleClass}">${bubbleContent}</div>
+    ${msg.is_deleted ? `<div class="edited-marker">(gelöscht)</div>` : `<div class="${bubbleClass}">${bubbleContent}</div>`}
     ${(!msg.is_deleted && msg.edited_at) ? `<div class="edited-marker">(bearbeitet)</div>` : ""}
-    <div class="time">${formatTime(msg.sent_at)}</div>
+    <div class="time">${formatTime(msg.sent_at)}${readStatusHtml}</div>
     ${(mine && !msg.is_deleted) ? `
     <div class="msg-actions">
       <button class="msg-btn msg-edit-btn"   title="Bearbeiten">✎</button>
@@ -224,16 +273,47 @@ function canSendNow() {
   return true;
 }
 
-function sendMessage() {
+async function sendMessage() {
   const text = msgInput.value.trim();
-  if (!text || activeChatId === null) return;
+  if (!text && !selectedFile) return;
+  if (activeChatId === null) return;
   if (!canSendNow()) {
     showRateNotice();
     return;   // Text bleibt im Eingabefeld erhalten
   }
-  socket.emit("send_message", { chat_id: activeChatId, content: text });
+  let file_url = null;
+  let file_type = null;
+  let file_name = null;
+  
+  if (selectedFile) {
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    try {
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.ok) {
+        file_url = data.file_url;
+        file_type = data.file_type;
+        file_name = data.file_name;
+      } else {
+        alert(data.error || "Upload fehlgeschlagen.");
+        return;
+      }
+    } catch (e) {
+      alert("Upload fehlgeschlagen.");
+      return;
+    }
+  }
+  socket.emit("send_message", { 
+    chat_id: activeChatId, 
+    content: text,
+    file_url: file_url,
+    file_type: file_type,
+    file_name: file_name
+  });
   msgInput.value = "";
   msgInput.style.height = "auto";
+  clearFile();
   msgInput.focus();
 }
 
@@ -807,20 +887,30 @@ socket.on("message_edited", (msg) => {
 
 socket.on("message_deleted", (data) => {
   const row = messagesEl.querySelector(`.row[data-id="${data.message_id}"]`);
-    if (row) {
+  if (row) {
     const bubble = row.querySelector(".bubble");
-    if (bubble) {
-      bubble.textContent = "Diese Nachricht wurde gelöscht.";
-      bubble.className = "bubble is-deleted";
-    }
+    if (bubble) bubble.remove();
     const actions = row.querySelector(".msg-actions");
-    if (actions) {
-      actions.remove();
-    }
-    const marker = row.querySelector(".edited-marker");
+    if (actions) actions.remove();
+    let marker = row.querySelector(".edited-marker");
     if (marker) {
-      marker.remove();
+      marker.textContent = "(gelöscht)";
+    } else {
+      marker = document.createElement("div");
+      marker.className = "edited-marker";
+      marker.textContent = "(gelöscht)";
+      row.querySelector(".time").insertAdjacentElement("beforebegin", marker);
     }
+  }
+});
+
+socket.on("message_read", (data) => {
+  if (data.chat_id === activeChatId) {
+     messagesEl.querySelectorAll(".read-status").forEach(el => {
+         el.textContent = "✓✓";
+         el.style.color = "#4CAF50";
+         el.style.opacity = "1";
+     });
   }
 });
 
