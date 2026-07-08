@@ -355,23 +355,30 @@ const renameInput  = document.getElementById("rename-input");
 const memberListEl = document.getElementById("manage-member-list");
 const addPickerEl  = document.getElementById("manage-add-picker");
 
+// Arbeitskopie der Änderungen, solange das Modal offen ist. Erst beim
+// Speichern werden sie an den Server gesendet; „Abbrechen“ verwirft sie.
+let manageDraft = null;
+
 document.getElementById("chat-settings-btn").addEventListener("click", openManageModal);
-document.getElementById("manage-close-btn").addEventListener("click", () => {
+document.getElementById("manage-cancel-btn").addEventListener("click", () => {
+  manageDraft = null;               // Änderungen verwerfen — nichts wurde committet
   manageModal.classList.add("hidden");
 });
 
 function openManageModal() {
   const chat = chatsById[activeChatId];
   if (!chat) return;
+  manageDraft = { members: chat.members.map(m => ({ id: m.id, username: m.username })) };
   renameInput.value = chat.name || "";
-  renderManageMembers(chat);
+  renderManageMembers();
   manageModal.classList.remove("hidden");
 }
 
-function renderManageMembers(chat) {
-  const memberIds = new Set(chat.members.map(m => m.id));
+function renderManageMembers() {
+  const members = manageDraft.members;
+  const memberIds = new Set(members.map(m => m.id));
 
-  memberListEl.innerHTML = chat.members.map(m => `
+  memberListEl.innerHTML = members.map(m => `
     <div class="member-row">
       <span>${escapeHtml(m.username)}${m.id === ME ? " (du)" : ""}</span>
       <button class="btn-remove" data-id="${m.id}" title="Entfernen">✕</button>
@@ -393,51 +400,72 @@ function renderManageMembers(chat) {
   });
 }
 
-document.getElementById("rename-btn").addEventListener("click", async () => {
-  if (activeChatId === null) return;
-  await fetch(`/api/chats/${activeChatId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: renameInput.value.trim() }),
-  });
+document.getElementById("manage-save-btn").addEventListener("click", async () => {
+  const chatId = activeChatId;
+  if (chatId === null || !manageDraft) return;
+  const chat = chatsById[chatId];
+  if (!chat) return;
+
+  const origIds  = new Set(chat.members.map(m => m.id));
+  const draftIds = new Set(manageDraft.members.map(m => m.id));
+  const tasks = [];
+
+  // Name, falls geändert.
+  const newName = renameInput.value.trim();
+  if (newName !== (chat.name || "")) {
+    tasks.push(fetch(`/api/chats/${chatId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    }));
+  }
+  // Neu hinzugefügte Mitglieder.
+  for (const m of manageDraft.members) {
+    if (!origIds.has(m.id)) {
+      tasks.push(fetch(`/api/chats/${chatId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: m.id }),
+      }));
+    }
+  }
+  // Entfernte Mitglieder (sich selbst wird separat über den ✕-Button behandelt).
+  for (const m of chat.members) {
+    if (m.id !== ME && !draftIds.has(m.id)) {
+      tasks.push(fetch(`/api/chats/${chatId}/members/${m.id}`, { method: "DELETE" }));
+    }
+  }
+
+  await Promise.all(tasks);
   // Der Server sendet chat_updated → Liste + Header aktualisieren sich.
+  manageDraft = null;
+  manageModal.classList.add("hidden");
 });
 
-async function addMember(userId) {
-  const res = await fetch(`/api/chats/${activeChatId}/members`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: userId }),
-  });
-  const data = await res.json();
-  if (data.ok) {
-    chatsById[data.chat.id] = data.chat;
-    renderManageMembers(data.chat);
-  }
+function addMember(userId) {
+  if (manageDraft.members.some(m => m.id === userId)) return;
+  const friend = friends.find(u => u.id === userId);
+  if (!friend) return;
+  manageDraft.members.push({ id: friend.id, username: friend.username });
+  renderManageMembers();
 }
 
-async function removeMember(userId) {
-  const chatId = activeChatId;
-  const chat = chatsById[chatId];
-  // Das Verlassen einer Gruppe sowie das Entfernen anderer muss bestätigt werden.
+function removeMember(userId) {
+  // Sich selbst zu entfernen bedeutet den Chat zu verlassen — das ist eine
+  // destruktive Aktion und wird sofort (mit Bestätigung) ausgeführt.
   if (userId === ME) {
+    const chat = chatsById[activeChatId];
     const label = chat && chat.is_group ? "diese Gruppe" : "diesen Chat";
     if (!confirm(`Möchtest du ${label} wirklich verlassen?`)) return;
-  } else {
-    const member = chat && chat.members.find(m => m.id === userId);
-    const name = member ? member.username : "dieses Mitglied";
-    if (!confirm(`Möchtest du ${name} wirklich aus dem Chat entfernen?`)) return;
-  }
-  await fetch(`/api/chats/${chatId}/members/${userId}`, { method: "DELETE" });
-  // Sich selbst entfernt → Chat wird über chat_removed geschlossen.
-  if (userId === ME) {
+    fetch(`/api/chats/${activeChatId}/members/${ME}`, { method: "DELETE" });
+    // Chat wird über chat_removed geschlossen.
+    manageDraft = null;
     manageModal.classList.add("hidden");
     return;
   }
-  if (chat) {
-    chat.members = chat.members.filter(m => m.id !== userId);
-    renderManageMembers(chat);
-  }
+  // Andere Mitglieder nur im Entwurf entfernen — wird beim Speichern übernommen.
+  manageDraft.members = manageDraft.members.filter(m => m.id !== userId);
+  renderManageMembers();
 }
 
 // ════════════════════════════════════════════════════════════
