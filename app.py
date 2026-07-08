@@ -2,6 +2,8 @@
 import os
 import time
 import atexit
+import uuid
+from werkzeug.utils import secure_filename
 from datetime import timedelta
 from collections import defaultdict, deque
 from threading import Lock
@@ -112,6 +114,11 @@ def chat_message_to_dict(message, sender_name=None):
         "sent_at": message["sent_at"].isoformat(),
         "edited_at": edited_at.isoformat() if edited_at else None,  # NEU
         "is_deleted": message.get("is_deleted", False),
+        "file_url": message.get("file_url"),
+        "file_type": message.get("file_type"),
+        "file_name": message.get("file_name"),
+        "read_count": message.get("read_count", 0),
+        "expected_read_count": message.get("expected_read_count", 0),
     }
 
 # ── Pages ───────────────────────────────────────────────────
@@ -300,8 +307,40 @@ def api_notifications():
 def api_notifications_read(chat_id):
     """Marks all unread messages in a chat as read for the current user."""
     mark_chat_notifications_read(session["user_id"], chat_id)
+    socketio.emit("message_read", {"chat_id": chat_id}, room=f"chat_{chat_id}")
     return jsonify({"ok": True})
 
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+@app.route("/api/upload", methods=["POST"])
+@login_required
+def api_upload():
+    if 'file' not in request.files:
+        return jsonify({"ok": False, "error": "Keine Datei gesendet."}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"ok": False, "error": "Keine Datei ausgewählt."}), 400
+    
+    filename = secure_filename(file.filename)
+    unique_filename = f"{uuid.uuid4().hex}_{filename}"
+    file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+    file.save(file_path)
+    
+    file_type = "file"
+    mime_type = file.mimetype
+    if mime_type.startswith("image/"):
+        file_type = "image"
+    elif mime_type.startswith("video/"):
+        file_type = "video"
+        
+    file_url = url_for('static', filename=f'uploads/{unique_filename}')
+    
+    return jsonify({
+        "ok": True, 
+        "file_url": file_url,
+        "file_type": file_type,
+        "file_name": filename
+    })
 
 # ── Friends & search API ────────────────────────────────────
 def request_to_dict(req):
@@ -538,7 +577,10 @@ def on_send_message(data):
         return
 
     content = (data.get("content") or "").strip()
-    if not content:
+    file_url = data.get("file_url")
+    file_type = data.get("file_type")
+    file_name = data.get("file_name")
+    if not content and not file_url:
         return
 
     # Reject over-long messages (the client also enforces this, but never trust it).
@@ -554,7 +596,7 @@ def on_send_message(data):
         emit("rate_limited", {"error": "Du sendest zu schnell. Bitte warte kurz."})
         return
 
-    message = save_chat_message(chat_id, sender_id, content)
+    message = save_chat_message(chat_id, sender_id, content, file_url, file_type, file_name)
     add_message_xp(sender_id)
     payload = chat_message_to_dict(message, sender_name=session.get("username", ""))
 
