@@ -226,14 +226,45 @@ async function openChat(chatId) {
   const messages = await res.json();
   messagesEl.innerHTML = "";
   messages.forEach(renderMessage);
-  scrollToBottom();
+
+  // Chats mit ungelesenen Nachrichten öffnen bei der ältesten ungelesenen
+  // Nachricht statt ganz unten, damit der Nutzer sie erst lesen kann.
+  const unreadCount = unreadByChat[chatId] || 0;
+  if (unreadCount > 0 && messages.length > 0) {
+    scrollToMessageIndex(Math.max(0, messages.length - unreadCount));
+  } else {
+    scrollToBottom();
+  }
   msgInput.focus();
 
-  // Öffnen markiert den Chat immer als gelesen (force), auch wenn der lokale
-  // Zähler noch nicht geladen ist (z.B. frischer Chat nach Anfrage-Annahme).
-  markChatRead(chatId, true);
+  // Nur als gelesen markieren, wenn wir tatsächlich ganz unten stehen —
+  // sonst bleiben die Benachrichtigungen bestehen, bis der Nutzer
+  // vollständig zur neuesten Nachricht runtergescrollt hat.
+  if (isScrolledToBottom()) markChatRead(chatId, true);
   if (window.showChatMobile) window.showChatMobile();
 }
+
+// Scrollt den Nachrichten-Container so, dass die Nachricht am gegebenen
+// Index (0-basiert, älteste zuerst) oben sichtbar wird.
+function scrollToMessageIndex(index) {
+  const rows = messagesEl.querySelectorAll(".row");
+  const row = rows[index];
+  if (row) row.scrollIntoView({ block: "start" });
+  else scrollToBottom();
+}
+
+// Ist der Nachrichten-Container (annähernd) bis zum Ende runtergescrollt?
+function isScrolledToBottom(threshold = 40) {
+  return messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - threshold;
+}
+
+// Wenn der Nutzer beim Scrollen die neueste Nachricht erreicht, Chat als
+// gelesen markieren (ohne force — markChatRead prüft selbst, ob überhaupt
+// etwas ungelesen ist, damit das nicht bei jedem Scroll-Event einen
+// Request auslöst).
+messagesEl.addEventListener("scroll", () => {
+  if (activeChatId !== null && isScrolledToBottom()) markChatRead(activeChatId);
+});
 
 // ── Eine Nachricht rendern ────────────────────────────────
 function renderMessage(msg) {
@@ -390,11 +421,22 @@ msgInput.addEventListener("input", () => {
 socket.on("new_message", (msg) => {
   updateChatPreview(msg.chat_id, msg.content);   // Sidebar-Vorschau aktuell halten
   if (msg.chat_id === activeChatId) {
+    // Nur mitscrollen + als gelesen markieren, wenn der Nutzer bereits ganz
+    // unten war. Liest er gerade ältere ungelesene Nachrichten weiter oben,
+    // soll die neue Nachricht ihn nicht unterbrechen — sie zählt weiterhin
+    // als ungelesen, bis er selbst runterscrollt.
+    const wasAtBottom = isScrolledToBottom();
     renderMessage(msg);
-    scrollToBottom();
-    // Offener Chat → in DB als gelesen markieren (force, da der lokale Zähler
-    // schon 0 ist, der Server aber trotzdem eine ungelesen-Zeile anlegt).
-    if (msg.sender_id !== ME) markChatRead(msg.chat_id, true);
+    if (wasAtBottom) {
+      scrollToBottom();
+      // Offener Chat, Nutzer war unten → in DB als gelesen markieren (force,
+      // da der lokale Zähler schon 0 ist, der Server aber trotzdem eine
+      // ungelesen-Zeile anlegt).
+      if (msg.sender_id !== ME) markChatRead(msg.chat_id, true);
+    } else if (msg.sender_id !== ME) {
+      unreadByChat[msg.chat_id] = (unreadByChat[msg.chat_id] || 0) + 1;
+      updateChatBadge(msg.chat_id);
+    }
   } else if (msg.sender_id !== ME) {
     // Geschlossener Chat → ungelesen-Zähler erhöhen + Item aufleuchten.
     unreadByChat[msg.chat_id] = (unreadByChat[msg.chat_id] || 0) + 1;
