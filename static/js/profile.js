@@ -15,9 +15,19 @@ const meAvatarEl          = document.getElementById("me-avatar");
 const settingsModal       = document.getElementById("settings-modal");
 const themeSelect         = document.getElementById("theme-select");
 const accentColorPicker   = document.getElementById("accent-color-picker");
-const accentPreview       = document.getElementById("accent-preview");
 const settingsCloseBtn    = document.getElementById("settings-close-btn");
 const settingsBtn         = document.getElementById("settings-btn");
+const themeCards          = document.getElementById("theme-cards");
+const accentSwatches      = document.getElementById("accent-swatches");
+const modeSection         = document.getElementById("mode-section");
+const accentSection       = document.getElementById("accent-section");
+const settingsLockedNote  = document.getElementById("settings-locked-note");
+const themeCardNormal     = document.getElementById("theme-card-normal");
+const themeNormalLock     = document.getElementById("theme-normal-lock");
+const themeNormalPrice    = document.getElementById("theme-normal-price");
+const themeUnlockBox      = document.getElementById("theme-unlock-box");
+const themeUnlockBtn      = document.getElementById("theme-unlock-btn");
+const themeUnlockCostEl   = document.getElementById("theme-unlock-cost");
 
 // Zwischengespeicherte Profildaten
 let profileData = {
@@ -37,6 +47,9 @@ async function loadProfileData() {
       presence: data.presence || "online",
     };
     updateProfileUI();
+    // Server ist die verbindliche Quelle für App-Theme + Freischaltung.
+    if (typeof syncThemeState === "function") syncThemeState(data);
+    refreshSettingsUI();
   } catch (e) {
     console.error("Profildaten konnten nicht geladen werden:", e);
   }
@@ -122,14 +135,52 @@ profileCancelBtn.addEventListener("click", closeProfileModal);
 meAvatarEl.addEventListener("click", openProfileModal);
 
 // ── Einstellungs-Modal ──────────────────────────────────────
+// Spiegelt die aktuelle Auswahl (Karten, Swatches) und schaltet Modus/Akzent
+// aus, wenn ein Theme mit festem Farbschema (z.B. Söder) aktiv ist.
+function refreshSettingsUI() {
+  const appTheme = localStorage.getItem('servus-app-theme') || 'soeder';
+  const mode     = localStorage.getItem('servus-theme')     || 'dark';
+  const accent   = localStorage.getItem('servus-accent')    || '#5c6fff';
+  const unlocked = isThemeUnlocked();
+  const cost     = getThemeUnlockCost();
+
+  // Theme-Karten markieren
+  themeCards.querySelectorAll(".theme-card").forEach(card => {
+    card.classList.toggle("selected", card.dataset.appTheme === appTheme);
+  });
+
+  // Normal-Theme sperren, bis freigekauft. Freikauf-Box entsprechend zeigen.
+  themeCardNormal.classList.toggle("locked", !unlocked);
+  themeNormalLock.classList.toggle("hidden", unlocked);
+  themeUnlockBox.classList.toggle("hidden", unlocked);
+  themeNormalPrice.textContent = cost + " Level";
+  themeUnlockCostEl.textContent = cost + " Level";
+
+  // Modus-Dropdown
+  themeSelect.value = mode;
+
+  // Akzent-Swatches + Custom-Picker
+  accentColorPicker.value = accent;
+  let matched = false;
+  accentSwatches.querySelectorAll(".accent-swatch[data-color]").forEach(sw => {
+    const on = sw.dataset.color.toLowerCase() === accent.toLowerCase();
+    sw.classList.toggle("selected", on);
+    if (on) matched = true;
+  });
+  // Eigene Farbe hervorheben, wenn sie keinem Preset entspricht.
+  const custom = accentSwatches.querySelector(".accent-custom");
+  custom.classList.toggle("selected", !matched);
+  custom.style.setProperty("--sw", accent);
+
+  // Bei festen Themes (Söder) Modus + Akzent deaktivieren.
+  const locked = appTheme !== 'normal';
+  modeSection.classList.toggle("section-disabled", locked);
+  accentSection.classList.toggle("section-disabled", locked);
+  settingsLockedNote.classList.toggle("hidden", !locked);
+}
+
 function openSettingsModal() {
-  const currentTheme  = localStorage.getItem('servus-theme')  || 'dark';
-  const currentAccent = localStorage.getItem('servus-accent') || '#5c6fff';
-
-  themeSelect.value = currentTheme;
-  accentColorPicker.value = currentAccent;
-  accentPreview.style.backgroundColor = currentAccent;
-
+  refreshSettingsUI();
   settingsModal.classList.remove("hidden");
 }
 
@@ -137,16 +188,84 @@ function closeSettingsModal() {
   settingsModal.classList.add("hidden");
 }
 
-// Theme wechseln
+// App-Theme serverseitig merken (verbindliche Quelle, geräteübergreifend).
+async function persistAppTheme(theme) {
+  try {
+    const res = await fetch("/api/theme", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme }),
+    });
+    return await res.json();
+  } catch (_) {
+    return { ok: false };
+  }
+}
+
+// Theme-Karte wählen (Söder / Normal). Normal ist nur nach Freikauf möglich.
+themeCards.addEventListener("click", async (e) => {
+  const card = e.target.closest(".theme-card");
+  if (!card) return;
+  const theme = card.dataset.appTheme;
+
+  if (theme === "normal" && !isThemeUnlocked()) {
+    // Gesperrt → auf die Freikauf-Box aufmerksam machen statt zu wechseln.
+    themeUnlockBox.classList.remove("hidden");
+    themeUnlockBox.classList.add("nudge");
+    setTimeout(() => themeUnlockBox.classList.remove("nudge"), 600);
+    return;
+  }
+
+  applyAppTheme(theme);      // sofort visuell umschalten
+  refreshSettingsUI();
+  const res = await persistAppTheme(theme);
+  if (!res.ok) {             // serverseitig doch gesperrt → zurück auf Söder
+    applyAppTheme("soeder");
+    refreshSettingsUI();
+    alert(res.error || "Theme konnte nicht gesetzt werden.");
+  }
+});
+
+// „Freikaufen": kostet Level, schaltet das Umschalten dauerhaft frei.
+themeUnlockBtn.addEventListener("click", async () => {
+  themeUnlockBtn.disabled = true;
+  const original = themeUnlockBtn.textContent;
+  themeUnlockBtn.textContent = "Wird freigeschaltet…";
+  try {
+    const res = await fetch("/api/theme/unlock", { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error || "Freikauf nicht möglich.");
+      return;
+    }
+    // Dauerhaft freigeschaltet: Status cachen, auf Normal wechseln.
+    localStorage.setItem("servus-theme-unlocked", "1");
+    applyAppTheme("normal");
+    if (typeof loadMe === "function") loadMe();   // Level/XP-Anzeige aktualisieren
+    refreshSettingsUI();
+  } finally {
+    themeUnlockBtn.disabled = false;
+    themeUnlockBtn.textContent = original;
+  }
+});
+
+// Erscheinungsbild (Hell/Dunkel) wechseln
 themeSelect.addEventListener("change", (e) => {
   applyTheme(e.target.value);
 });
 
-// Akzentfarbe wechseln
+// Akzentfarbe über ein Preset-Swatch wählen
+accentSwatches.addEventListener("click", (e) => {
+  const sw = e.target.closest(".accent-swatch[data-color]");
+  if (!sw) return;
+  applyAccent(sw.dataset.color);
+  refreshSettingsUI();
+});
+
+// Akzentfarbe frei wählen
 accentColorPicker.addEventListener("input", (e) => {
-  const color = e.target.value;
-  applyAccent(color);
-  accentPreview.style.backgroundColor = color;
+  applyAccent(e.target.value);
+  refreshSettingsUI();
 });
 
 settingsBtn.addEventListener("click", openSettingsModal);

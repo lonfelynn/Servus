@@ -7,6 +7,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/themes/soeder.css') }}">
 </head>
 
 <body>
@@ -243,24 +244,84 @@
 <div class="modal-overlay hidden" id="settings-modal">
   <div class="modal">
     <div class="modal-title">Einstellungen</div>
+
+    <!-- Theme-Auswahl als moderne Karten mit Infotext -->
     <div class="modal-label modal-label-icon">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-      Design
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 100 18c1 0 1.6-.6 1.6-1.4 0-.4-.15-.7-.4-1a1.4 1.4 0 011.1-2.3H16a4 4 0 004-4 8 8 0 00-8-8.3z"/><circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.5" cy="15.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r="1.1" fill="currentColor" stroke="none"/></svg>
+      Theme
     </div>
-    <select id="theme-select" class="modal-input" style="cursor: pointer;">
-      <option value="dark">🌙 Dunkel</option>
-      <option value="light">☀️ Hell</option>
-    </select>
-    <div class="modal-label modal-label-icon" style="margin-top: 16px;">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(0.4 0.2)"><path d="M12 3a9 9 0 100 18c1 0 1.6-.6 1.6-1.4 0-.4-.15-.7-.4-1a1.4 1.4 0 011.1-2.3H16a4 4 0 004-4 8 8 0 00-8-8.3z"/><circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.5" cy="15.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r="1.1" fill="currentColor" stroke="none"/></g></svg>
-      Akzentfarbe
+    <div class="theme-cards" id="theme-cards">
+      <button type="button" class="theme-card" data-app-theme="soeder">
+        <span class="theme-card-swatch theme-swatch-soeder"></span>
+        <span class="theme-card-body">
+          <span class="theme-card-name">Söder <span class="theme-card-tag">Standard</span></span>
+          <span class="theme-card-desc">Blau-weiße Rauten, schwebende Sprüche und ein Gruß aus Bayern.</span>
+        </span>
+        <svg class="theme-card-check icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+      <button type="button" class="theme-card" data-app-theme="normal" id="theme-card-normal">
+        <span class="theme-card-swatch theme-swatch-normal"></span>
+        <span class="theme-card-body">
+          <span class="theme-card-name">Normal
+            <span class="theme-card-lock" id="theme-normal-lock">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+              <span id="theme-normal-price">15 Level</span>
+            </span>
+          </span>
+          <span class="theme-card-desc">Klares Design in Hell oder Dunkel mit eigener Akzentfarbe.</span>
+        </span>
+        <svg class="theme-card-check icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
     </div>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-      <input type="color" id="accent-color-picker" class="modal-input"
-             style="width: 60px; height: 40px; padding: 4px; cursor: pointer;" />
-      <div id="accent-preview"
-           style="width: 60px; height: 40px; border-radius: 12px; border: 2px solid var(--border); background: var(--accent);"></div>
+
+    <!-- Freikauf-Box: nur sichtbar, solange das Normal-Theme gesperrt ist -->
+    <div class="theme-unlock-box hidden" id="theme-unlock-box">
+      <div class="theme-unlock-text" id="theme-unlock-text">
+        Söder ist das Standard-Theme. Kaufe dich für <strong id="theme-unlock-cost">15 Level</strong>
+        frei, um dauerhaft frei zwischen den Themes wechseln zu können.
+      </div>
+      <button class="btn btn-primary" id="theme-unlock-btn">Freikaufen</button>
     </div>
+
+    <!-- Modus-Dropdown (nur im Normal-Theme aktiv) -->
+    <div class="settings-section" id="mode-section">
+      <div class="modal-label modal-label-icon">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+        Erscheinungsbild
+      </div>
+      <div class="select-wrap">
+        <select id="theme-select" class="modal-input select-modern">
+          <option value="dark">Dunkel</option>
+          <option value="light">Hell</option>
+        </select>
+        <svg class="select-caret icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+
+    <!-- Akzentfarbe (nur im Normal-Theme aktiv) -->
+    <div class="settings-section" id="accent-section">
+      <div class="modal-label modal-label-icon">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(0.4 0.2)"><path d="M12 3a9 9 0 100 18c1 0 1.6-.6 1.6-1.4 0-.4-.15-.7-.4-1a1.4 1.4 0 011.1-2.3H16a4 4 0 004-4 8 8 0 00-8-8.3z"/><circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.5" cy="15.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r="1.1" fill="currentColor" stroke="none"/></g></svg>
+        Akzentfarbe
+      </div>
+      <div class="accent-row" id="accent-swatches">
+        <button type="button" class="accent-swatch" data-color="#5c6fff" style="--sw:#5c6fff" title="Violett"></button>
+        <button type="button" class="accent-swatch" data-color="#0098d8" style="--sw:#0098d8" title="Blau"></button>
+        <button type="button" class="accent-swatch" data-color="#10b981" style="--sw:#10b981" title="Grün"></button>
+        <button type="button" class="accent-swatch" data-color="#D4A574" style="--sw:#D4A574" title="Amber"></button>
+        <button type="button" class="accent-swatch" data-color="#ec4899" style="--sw:#ec4899" title="Pink"></button>
+        <button type="button" class="accent-swatch" data-color="#ef4444" style="--sw:#ef4444" title="Rot"></button>
+        <label class="accent-swatch accent-custom" title="Eigene Farbe">
+          <input type="color" id="accent-color-picker" />
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-locked-note hidden" id="settings-locked-note">
+      Im Söder-Theme sind Erscheinungsbild und Akzentfarbe fest vorgegeben.
+    </div>
+
     <div class="modal-actions" style="margin-top: 16px;">
       <button class="btn btn-ghost" id="settings-close-btn">Schließen</button>
     </div>
@@ -272,6 +333,7 @@
   window.SERVUS = { me: {{ user_id }}, myName: {{ username | tojson }} };
 </script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/themes/soeder.js') }}"></script>
 <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/icons.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>

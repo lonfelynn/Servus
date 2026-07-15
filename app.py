@@ -17,6 +17,9 @@ from models import (
     get_user_by_id,
     update_user_profile,
     add_message_xp,
+    get_theme_state,
+    set_app_theme,
+    unlock_soeder_theme,
     find_or_create_chat,
     get_user_chats,
     get_user_chat_ids,
@@ -196,7 +199,26 @@ def api_me():
         "presence": user.get("presence"),
         "accent_color": user.get("accent_color"),
         "theme_mode": user.get("theme_mode"),
+        **get_theme_state(user),
     })
+
+
+# ── App-Theme (Söder-Standard + Freikaufen) ─────────────────
+@app.route("/api/theme", methods=["POST"])
+@login_required
+def api_set_theme():
+    """Wechselt das App-Theme. 'normal' nur nach der Freischaltung erlaubt."""
+    data = request.get_json(silent=True) or {}
+    result = set_app_theme(session["user_id"], (data.get("theme") or "").strip())
+    return jsonify(result), (200 if result.get("ok") else 400)
+
+
+@app.route("/api/theme/unlock", methods=["POST"])
+@login_required
+def api_unlock_theme():
+    """Kauft den Nutzer für Level-Kosten dauerhaft aus dem Söder-Theme frei."""
+    result = unlock_soeder_theme(session["user_id"])
+    return jsonify(result), (200 if result.get("ok") else 400)
 
 
 @app.route("/api/users")

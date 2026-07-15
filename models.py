@@ -205,6 +205,79 @@ def spend_levels(user_id: int, levels: int):
             "spent_levels": levels
         }
 
+# ── App-Theme / „Söder"-Freischaltung ──────────────────────
+# Söder ist das Standard-Theme für alle. Wer umschalten möchte, kauft sich
+# einmalig für THEME_UNLOCK_COST Level frei (dauerhaft, via theme_unlocked).
+THEME_UNLOCK_COST = 15
+_ALLOWED_APP_THEMES = ("soeder", "normal")
+
+
+def get_theme_state(user):
+    """Baut den Theme-Status aus einer bereits geladenen User-Zeile."""
+    return {
+        "app_theme": user.get("app_theme") or "soeder",
+        "theme_unlocked": bool(user.get("theme_unlocked")),
+        "theme_unlock_cost": THEME_UNLOCK_COST,
+    }
+
+
+def set_app_theme(user_id: int, theme: str):
+    """Setzt das App-Theme. 'normal' ist nur nach der Freischaltung erlaubt."""
+    if theme not in _ALLOWED_APP_THEMES:
+        return {"ok": False, "error": "Unbekanntes Theme."}
+
+    user = get_user_by_id(user_id)
+    if user is None:
+        return {"ok": False, "error": "Nutzer nicht gefunden."}
+    if theme != "soeder" and not user.get("theme_unlocked"):
+        return {"ok": False, "error": "Dieses Theme ist noch gesperrt."}
+
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE users SET app_theme = %s WHERE id = %s", (theme, user_id)
+        )
+    return {"ok": True, "app_theme": theme}
+
+
+def unlock_soeder_theme(user_id: int):
+    """„Kauft" den Nutzer für THEME_UNLOCK_COST Level aus dem Söder-Theme frei.
+
+    Nutzt dieselbe XP-erhaltende Rechnung wie spend_levels (xp_for_level /
+    calculate_level), erlaubt aber die Freischaltung bereits ab genau
+    THEME_UNLOCK_COST Leveln. Danach ist theme_unlocked dauerhaft TRUE und das
+    Theme wird direkt auf 'normal' umgestellt.
+    """
+    user = get_user_by_id(user_id)
+    if user is None:
+        return {"ok": False, "error": "Nutzer nicht gefunden."}
+
+    if user.get("theme_unlocked"):
+        # Schon freigeschaltet – nichts abbuchen.
+        return {"ok": True, "already": True, "level": user["level"],
+                "xp": user["xp"], "cost": THEME_UNLOCK_COST}
+
+    current_level = user["level"]
+    if current_level < THEME_UNLOCK_COST:
+        return {"ok": False, "error": f"Du brauchst mindestens Level {THEME_UNLOCK_COST}.",
+                "level": current_level, "xp": user["xp"], "cost": THEME_UNLOCK_COST}
+
+    # Level-Kosten XP-erhaltend abbuchen (Fortschritt im Rest-Level bleibt).
+    target_level = current_level - THEME_UNLOCK_COST
+    xp_cost = xp_for_level(current_level) - xp_for_level(target_level)
+    new_xp = max(0, user["xp"] - xp_cost)
+    new_level = calculate_level(new_xp)
+
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE users SET xp = %s, level = %s, theme_unlocked = TRUE, app_theme = 'normal' "
+            "WHERE id = %s",
+            (new_xp, new_level, user_id)
+        )
+    return {"ok": True, "level": new_level, "xp": new_xp, "cost": THEME_UNLOCK_COST}
+
+
 def add_message_xp(user_id: int):
     """Awards XP for sending a message and recalculates the level."""
     with get_connection() as connection:

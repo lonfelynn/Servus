@@ -32,8 +32,8 @@ def register():
             return jsonify({"ok": False, "error": "Benutzername darf nur Buchstaben, Zahlen, _ und - enthalten."})
 
         if len(password) < MIN_PASSWORD_LENGTH:
-            return jsonify({"ok": False, "error": f"Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein."}
-                           
+            return jsonify({"ok": False, "error": f"Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein."})
+
         if not PASSWORD_PATTERN.match(password):
             return jsonify({"ok": False, "error": "Passwort muss Groß- und Kleinbuchstaben sowie eine Zahl enthalten."})
 
