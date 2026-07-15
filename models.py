@@ -82,16 +82,16 @@ def update_user_profile(user_id: int, **fields):
 
 
 def get_all_users(exclude_id: "int | None" = None):
-    """Returns all users (id, username, level, xp), optionally excluding one id."""
+    """Returns all users (id, username, level, xp, avatar_url, status_text, presence), optionally excluding one id."""
     with get_connection() as connection:
         cursor = connection.cursor()
         if exclude_id is None:
             cursor.execute(
-                "SELECT id, username, level, xp FROM users ORDER BY username"
+                "SELECT id, username, level, xp, avatar_url, status_text, presence FROM users ORDER BY username"
             )
         else:
             cursor.execute(
-                "SELECT id, username, level, xp FROM users "
+                "SELECT id, username, level, xp, avatar_url, status_text, presence FROM users "
                 "WHERE id <> %s ORDER BY username",
                 (exclude_id,)
             )
@@ -299,6 +299,9 @@ def get_user_chats(user_id: int):
             SELECT c.id, c.name,
                    array_agg(u.id       ORDER BY u.username) AS member_ids,
                    array_agg(u.username ORDER BY u.username) AS member_names,
+                   array_agg(u.avatar_url ORDER BY u.username) AS member_avatars,
+                   array_agg(u.status_text ORDER BY u.username) AS member_statuses,
+                   array_agg(u.presence ORDER BY u.username) AS member_presences,
                    (SELECT MAX(sent_at) FROM chat_messages m
                      WHERE m.chat_id = c.id) AS last_at,
                    (SELECT content FROM chat_messages m
@@ -317,8 +320,8 @@ def get_user_chats(user_id: int):
         chats = []
         for row in cursor.fetchall():
             members = [
-                {"id": mid, "username": mname}
-                for mid, mname in zip(row["member_ids"], row["member_names"])
+                {"id": mid, "username": mname, "avatar_url": mavatar, "status_text": mstatus, "presence": mpresence}
+                for mid, mname, mavatar, mstatus, mpresence in zip(row["member_ids"], row["member_names"], row["member_avatars"], row["member_statuses"], row["member_presences"])
             ]
             chats.append({
                 "id": row["id"],
@@ -362,12 +365,12 @@ def get_chat(chat_id: int, viewer_id: int):
 
 
 def get_chat_members(chat_id: int):
-    """Returns the members of a chat as a list of {id, username} dicts."""
+    """Returns the members of a chat as a list of {id, username, avatar_url, status_text, presence} dicts."""
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
             """
-            SELECT u.id, u.username
+            SELECT u.id, u.username, u.avatar_url, u.status_text, u.presence
             FROM   chat_members cm
             JOIN   users u ON u.id = cm.user_id
             WHERE  cm.chat_id = %s
@@ -561,13 +564,13 @@ def get_friend_ids(user_id: int):
 
 
 def get_friends(user_id: int):
-    """Returns the accepted friends of `user_id` as user rows (id, username, level),
+    """Returns the accepted friends of `user_id` as user rows (id, username, level, avatar_url, status_text, presence),
     ordered by username. Used to populate the group-member pickers."""
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
             """
-            SELECT u.id, u.username, u.level
+            SELECT u.id, u.username, u.level, u.avatar_url, u.status_text, u.presence
             FROM   friendships f
             JOIN   users u
               ON   u.id = CASE WHEN f.requester_id = %s

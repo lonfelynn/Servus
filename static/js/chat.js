@@ -146,6 +146,47 @@ removeFriendModal.addEventListener("click", (e) => {
   if (e.target === removeFriendModal) closeRemoveFriendModal();
 });
 
+// ════════════════════════════════════════════════════════════
+// ── Freunde-Seitenleiste ──────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const friendsSidebar = document.getElementById("friends-sidebar");
+const friendsSearchInput = document.getElementById("friends-search-input");
+
+document.getElementById("friends-btn").addEventListener("click", () => {
+  document.getElementById("sidebar").classList.add("hidden");
+  friendsSidebar.classList.remove("hidden");
+});
+
+document.getElementById("back-to-chats-friends-btn").addEventListener("click", () => {
+  friendsSidebar.classList.add("hidden");
+  document.getElementById("sidebar").classList.remove("hidden");
+});
+
+friendsSidebar.addEventListener("click", (e) => {
+  if (e.target === friendsSidebar) {
+    friendsSidebar.classList.add("hidden");
+    document.getElementById("sidebar").classList.remove("hidden");
+  }
+});
+
+friendsSidebar.addEventListener("keyup", () => {
+  const query = friendsSearchInput.value.toLowerCase();
+  const items = friendsListEl.querySelectorAll(".friend-row");
+  items.forEach(item => {
+    const name = item.querySelector(".friend-row-name").textContent.toLowerCase();
+    item.style.display = name.includes(query) ? "" : "none";
+  });
+});
+
+friendsSidebar.addEventListener("input", () => {
+  const query = friendsSearchInput.value.toLowerCase();
+  const items = friendsListEl.querySelectorAll(".friend-row");
+  items.forEach(item => {
+    const name = item.querySelector(".friend-row-name").textContent.toLowerCase();
+    item.style.display = name.includes(query) ? "" : "none";
+  });
+});
+
 // Unterzeile eines Chat-Eintrags: gekürzte letzte Nachricht, sonst Fallback.
 function chatSubline(chat) {
   if (chat.last_message) return truncate(chat.last_message, SIDEBAR_PREVIEW_MAX);
@@ -557,25 +598,92 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 });
 
 // ════════════════════════════════════════════════════════════
-// ── Modal: Neue Gruppe ─────────────────────────────────────
+// ── Modal: Chat erstellen (1:1 oder Gruppe) ───────────────
 // ════════════════════════════════════════════════════════════
-const groupModal    = document.getElementById("group-modal");
-const groupPicker   = document.getElementById("group-member-picker");
-const groupNameIn   = document.getElementById("group-name-input");
+const createChatModal = document.getElementById("create-chat-modal");
+const dmMode = document.getElementById("dm-mode");
+const groupMode = document.getElementById("group-mode");
+const dmPicker = document.getElementById("dm-member-picker");
+const groupPicker = document.getElementById("group-member-picker");
+const groupNameIn = document.getElementById("group-name-input");
 
-document.getElementById("new-group-btn").addEventListener("click", () => {
+let createChatMode = "group";
+
+document.getElementById("new-chat-btn").addEventListener("click", () => {
+  createChatMode = "group";
+  showCreateChatModal();
+});
+
+document.getElementById("create-dm-btn").addEventListener("click", () => {
+  createChatMode = "dm";
+  dmMode.style.display = "block";
+  groupMode.style.display = "none";
+  document.getElementById("create-dm-btn").classList.add("btn-primary");
+  document.getElementById("create-dm-btn").classList.remove("btn-ghost");
+  document.getElementById("create-group-btn").classList.remove("btn-primary");
+  document.getElementById("create-group-btn").classList.add("btn-ghost");
+});
+
+document.getElementById("create-group-btn").addEventListener("click", () => {
+  createChatMode = "group";
+  groupMode.style.display = "block";
+  dmMode.style.display = "none";
+  document.getElementById("create-group-btn").classList.add("btn-primary");
+  document.getElementById("create-group-btn").classList.remove("btn-ghost");
+  document.getElementById("create-dm-btn").classList.remove("btn-primary");
+  document.getElementById("create-dm-btn").classList.add("btn-ghost");
+});
+
+function showCreateChatModal() {
   groupNameIn.value = "";
-  groupPicker.innerHTML = friends.map(u => `
+  createChatMode = "group";
+  dmMode.style.display = "none";
+  groupMode.style.display = "block";
+  document.getElementById("create-group-btn").classList.add("btn-primary");
+  document.getElementById("create-group-btn").classList.remove("btn-ghost");
+  document.getElementById("create-dm-btn").classList.remove("btn-primary");
+  document.getElementById("create-dm-btn").classList.add("btn-ghost");
+  
+  const pickerHtml = friends.map(u => `
     <label class="picker-item">
       <input type="checkbox" value="${u.id}">
       <span>${escapeHtml(u.username)}</span>
     </label>
   `).join("") || `<div class="empty-list">Du hast noch keine Freunde zum Hinzufügen.</div>`;
-  groupModal.classList.remove("hidden");
+  
+  dmPicker.innerHTML = pickerHtml;
+  groupPicker.innerHTML = pickerHtml;
+  
+  createChatModal.classList.remove("hidden");
+}
+
+document.getElementById("dm-cancel-btn").addEventListener("click", () => {
+  createChatModal.classList.add("hidden");
+});
+
+document.getElementById("dm-create-btn").addEventListener("click", async () => {
+  const ids = [...dmPicker.querySelectorAll("input:checked")].map(c => Number(c.value));
+  if (ids.length === 0) return;
+
+  const res = await fetch("/api/chats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ member_ids: ids }),
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    alert(data.error || "Chat konnte nicht erstellt werden.");
+    return;
+  }
+
+  createChatModal.classList.add("hidden");
+  socket.emit("join_chat", { chat_id: data.chat.id });
+  await loadChats();
+  openChat(data.chat.id);
 });
 
 document.getElementById("group-cancel-btn").addEventListener("click", () => {
-  groupModal.classList.add("hidden");
+  createChatModal.classList.add("hidden");
 });
 
 document.getElementById("group-create-btn").addEventListener("click", async () => {
@@ -593,7 +701,7 @@ document.getElementById("group-create-btn").addEventListener("click", async () =
     return;
   }
 
-  groupModal.classList.add("hidden");
+  createChatModal.classList.add("hidden");
   socket.emit("join_chat", { chat_id: data.chat.id });
   await loadChats();
   openChat(data.chat.id);

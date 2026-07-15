@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Servus Messenger</title>
+  <title>Servus</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
@@ -36,8 +36,11 @@
 
     <div class="list-header">
       <div class="list-title">Chats</div>
-      <button class="icon-btn" id="new-group-btn" title="Neue Gruppe">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 21a6.5 6.5 0 0113 0"/><line x1="18.5" y1="8" x2="18.5" y2="14"/><line x1="15.5" y1="11" x2="21.5" y2="11"/></svg>
+      <button class="icon-btn" id="new-chat-btn" title="Chat erstellen">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="icon-btn" id="friends-btn" title="Freunde">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </button>
       <button class="icon-btn" id="requests-btn" title="Anfragen" style="position: relative;">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 6 12 13 22 6"/></svg>
@@ -48,9 +51,6 @@
     <div class="chat-list" id="chat-list">
       <div class="empty-list">Lade Chats…</div>
     </div>
-
-    <div class="list-title">Freunde</div>
-    <div class="friends-list" id="friends-list"></div>
 
     <div class="list-title">Nutzer suchen</div>
     <div class="search-box">
@@ -70,6 +70,22 @@
     </div>
     <div class="list-title" style="padding: 16px 20px 8px;">Anfragen</div>
     <div class="requests-list" id="requests-list"></div>
+  </aside>
+
+  <!-- Freunde-Seitenleiste (standardmäßig ausgeblendet) -->
+  <aside class="sidebar hidden" id="friends-sidebar" style="display: none;">
+    <div class="sidebar-top">
+      <button class="icon-btn" id="back-to-chats-friends-btn" title="Zurück"
+              style="width: 100%; justify-content: center;">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+    </div>
+    <div class="list-title" style="padding: 16px 20px 8px;">Freunde</div>
+    <div class="search-box" style="padding: 0 20px 12px;">
+      <input type="text" id="friends-search-input" class="search-input"
+             placeholder="Freunde suchen…" maxlength="80" autocomplete="off"/>
+    </div>
+    <div class="friends-list" id="friends-list"></div>
   </aside>
 
    <!-- Chat -->
@@ -117,17 +133,35 @@
 
 </div>
 
-<!-- Modal: Neue Gruppe erstellen -->
-<div class="modal-overlay hidden" id="group-modal">
+<!-- Modal: Chat erstellen (1:1 oder Gruppe) -->
+<div class="modal-overlay hidden" id="create-chat-modal">
   <div class="modal">
-    <div class="modal-title">Neue Gruppe</div>
-    <input class="modal-input" id="group-name-input" type="text"
-           placeholder="Gruppenname (optional)" maxlength="80"/>
-    <div class="modal-label">Mitglieder auswählen</div>
-    <div class="member-picker" id="group-member-picker"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="group-cancel-btn">Abbrechen</button>
-      <button class="btn btn-primary" id="group-create-btn">Erstellen</button>
+    <div class="modal-title">Chat erstellen</div>
+    <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+      <button class="btn btn-primary" id="create-dm-btn" style="flex: 1;">Direktnachricht</button>
+      <button class="btn btn-ghost" id="create-group-btn" style="flex: 1;">Gruppe</button>
+    </div>
+    
+    <!-- DM-Modus -->
+    <div id="dm-mode" style="display: none;">
+      <div class="modal-label">Kontakt auswählen</div>
+      <div class="member-picker" id="dm-member-picker"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="dm-cancel-btn">Abbrechen</button>
+        <button class="btn btn-primary" id="dm-create-btn">Chat starten</button>
+      </div>
+    </div>
+    
+    <!-- Gruppen-Modus -->
+    <div id="group-mode">
+      <input class="modal-input" id="group-name-input" type="text"
+             placeholder="Gruppenname (optional)" maxlength="80"/>
+      <div class="modal-label">Mitglieder auswählen</div>
+      <div class="member-picker" id="group-member-picker"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="group-cancel-btn">Abbrechen</button>
+        <button class="btn btn-primary" id="group-create-btn">Erstellen</button>
+      </div>
     </div>
   </div>
 </div>
