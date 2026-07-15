@@ -1,13 +1,19 @@
 # auth.py
 from flask import Blueprint, request, session, jsonify, render_template
 from models import create_user, get_user_by_username, check_password
+import re
+from extensions import limiter
 
 auth_bp = Blueprint("auth", __name__)
 
 MIN_USERNAME_LENGTH = 3
-MIN_PASSWORD_LENGTH = 6
+MAX_USERNAME_LENGTH = 32
+MIN_PASSWORD_LENGTH = 8
 
+USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$")
 
+@limiter.limit("10 per minute")
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -18,9 +24,18 @@ def register():
 
         if len(username) < MIN_USERNAME_LENGTH:
             return jsonify({"ok": False, "error": f"Benutzername muss mindestens {MIN_USERNAME_LENGTH} Zeichen lang sein."})
+            
+        if len(username) > MAX_USERNAME_LENGTH:
+            return jsonify({"ok": False, "error": f"Benutzername darf maximal {MAX_USERNAME_LENGTH} Zeichen lang sein."})
+
+        if not USERNAME_PATTERN.match(username):
+            return jsonify({"ok": False, "error": "Benutzername darf nur Buchstaben, Zahlen, _ und - enthalten."})
 
         if len(password) < MIN_PASSWORD_LENGTH:
-            return jsonify({"ok": False, "error": f"Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein."})
+            return jsonify({"ok": False, "error": f"Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein."}
+                           
+        if not PASSWORD_PATTERN.match(password):
+            return jsonify({"ok": False, "error": "Passwort muss Groß- und Kleinbuchstaben sowie eine Zahl enthalten."})
 
         if password != confirm:
             return jsonify({"ok": False, "error": "Passwörter stimmen nicht überein."})
@@ -34,6 +49,7 @@ def register():
     return render_template("register.html")
 
 
+@limiter.limit("5 per minute")
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
