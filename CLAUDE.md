@@ -29,17 +29,35 @@ to syntax-check.
 
 ## Architecture
 
-Server-rendered Jinja templates + vanilla JS on the frontend; Flask blueprint for auth,
-Socket.IO for live messaging, and a pooled psycopg2 layer for PostgreSQL.
+Server-rendered Jinja templates + vanilla JS on the frontend; Flask blueprints for the
+web layer, Socket.IO for live messaging, and a pooled psycopg2 layer for PostgreSQL.
 
-- **`app.py`** — app factory-less entrypoint. Holds page routes (`/`, `/chat`), the JSON
-  API (`/api/me`, `/api/users`, `/api/messages/<id>`), and the Socket.IO handlers. Registers
-  the auth blueprint and the `close_pool` atexit hook.
-- **`auth.py`** — `auth_bp` blueprint: `/register`, `/login`, `/logout`. POST bodies are JSON;
-  responses are `{ok, error}` / `{ok, redirect}`. On login it sets `session["user_id"]` and
-  `session["username"]` — these two session keys are the contract the rest of the app relies on.
-- **`models.py`** — all SQL lives here. Password hashing (bcrypt), users, messages, and the
-  XP/level system.
+The infrastructure lives at the repo root; the whole web layer lives in the **`routes/`**
+package. Keep it that way — new routes go in the matching blueprint module, not `app.py`.
+
+- **`app.py`** — thin entrypoint. Builds the Flask app, applies config + security headers,
+  binds the extensions (`limiter.init_app` / `socketio.init_app`), registers every blueprint
+  from `routes`, and wires the `close_pool` atexit hook. Under `__main__` it opens the pool,
+  runs migrations, and serves. **No routes live here.**
+- **`extensions.py`** — the shared `limiter` and `socketio` instances, created unbound and
+  attached to the app later via `init_app` (this is what avoids circular imports: the route
+  modules import these from here, never from `app.py`).
+- **`routes/`** — the web layer, one blueprint module per domain. `routes/__init__.py`
+  exposes `all_blueprints` and imports `sockets` so its `@socketio.on(...)` handlers register.
+  - `routes/auth.py` — `auth_bp`: `/register`, `/login`, `/logout`. POST bodies are JSON;
+    responses are `{ok, error}` / `{ok, redirect}`. On login it sets `session["user_id"]` and
+    `session["username"]` — these two session keys are the contract the rest of the app relies on.
+  - `routes/views.py` — `main_bp`: the page routes (`/`, `/chat`).
+  - `routes/profile.py` — `profile_bp`: `/api/me`, app-theme and user-directory API.
+  - `routes/chats.py` — `chats_bp`: chats, messages, notifications, uploads, membership.
+  - `routes/friends.py` — `friends_bp`: user search and the friend-request lifecycle.
+  - `routes/sockets.py` — the Socket.IO handlers plus the in-memory send rate limiter.
+  - `routes/helpers.py` — `login_required` and the row → JSON serializers (`chat_message_to_dict`,
+    `request_to_dict`). `routes/constants.py` — `BASE_DIR` + size limits. `routes/soeder.py` —
+    loads the Söder-quote snapshot. Route modules import these siblings **relatively**
+    (`from .helpers import …`) and import root infra absolutely (`from models import …`).
+- **`models.py`** — all SQL lives here. Password hashing (bcrypt), users, chats, messages,
+  friends, and the XP/level system.
 - **`database.py`** — the connection pool and the migration runner (see below).
 - **`templates/`** + **`static/css/`** + **`static/js/`** — one CSS and one JS file per page.
 
