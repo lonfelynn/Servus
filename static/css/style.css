@@ -129,6 +129,16 @@ body{
     margin-bottom:40px;
 }
 
+/* Login-Logo: als echte CSS-Regel begrenzt, da inline style="" per CSP
+   (style-src ohne 'unsafe-inline') blockiert wird und das Bild sonst in
+   seiner natürlichen Größe erscheint. */
+.logo img{
+    width:42px;
+    height:42px;
+    object-fit:contain;
+    flex-shrink:0;
+}
+
 .logo-icon{
 
     width:42px;
