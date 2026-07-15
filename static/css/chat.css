@@ -796,22 +796,6 @@ svg.icon {
 
 /* ─── Nachricht bearbeiten / löschen ─── */
 
-/* Action-Buttons (Stift + X) tauchen bei eigenen Nachrichten beim Hover auf */
-.msg-actions {
-  position: relative;
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-  opacity: 0;
-  transition: opacity .15s;
-}
-.row:hover .msg-actions { opacity: 1; }
-
-/* Auf Touch-Geräten keine Hover-States → Buttons immer sichtbar */
-@media (hover: none) {
-  .msg-actions { opacity: 1; }
-}
-
 .msg-btn {
   background: transparent;
   border: none;
@@ -883,13 +867,30 @@ svg.icon {
 .btn-edit-cancel:hover { color: #fff; }
 
 /* ─── Nachrichten-Dropdown ─── */
+.msg-actions {
+  position: relative;
+  opacity: 0;
+  transition: opacity .15s;
+  flex-shrink: 0;
+}
+.row:hover .msg-actions { opacity: 1; }
+@media (hover: none) { .msg-actions { opacity: 1; } }
+
+.bubble-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.row.sent .bubble-line { flex-direction: row-reverse; }
+.row.received .bubble-line { flex-direction: row; }
+
 .msg-actions-trigger {
   background: transparent;
   border: none;
   color: var(--muted);
   cursor: pointer;
   font-size: 15px;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 6px;
   line-height: 1;
   transition: color .12s, background .12s;
@@ -913,6 +914,12 @@ svg.icon {
 .row.sent .msg-dropdown { right: 0; }
 .row.received .msg-dropdown { left: 0; }
 .msg-dropdown.open { display: flex; }
+.msg-dropdown.drop-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
 
 .msg-dropdown button {
   display: flex;
@@ -932,6 +939,28 @@ svg.icon {
 .msg-dropdown button:hover { background: var(--input); }
 .msg-dropdown button.danger { color: #ef4444; }
 .msg-dropdown hr { border: none; border-top: 1px solid var(--border); margin: 4px 2px; }
+
+.quote-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 3px;
+  background: rgba(255,255,255,.06);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  font-size: 12.5px;
+  cursor: default;
+}
+.row.sent .quote-block { align-self: flex-end; }
+.row.received .quote-block { align-self: flex-start; }
+.quote-block b { color: var(--accent); font-size: 12px; font-weight: 600; }
+.quote-block span {
+  color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 260px;
+}
 
 /* ─── Antworten-Vorschau über dem Eingabefeld ─── */
 .reply-bar {

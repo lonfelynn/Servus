@@ -1,0 +1,154 @@
+/* Ergänzt style.css um alles, was für die Profilseite spezifisch ist:
+   Avatar-Bearbeitung, Status-Zeichenzähler, Erfolgsmeldung, Back-Link. */
+
+.profile-panel {
+  max-width: 480px;
+}
+
+/* ─── Zurück-Link ─── */
+.back-link {
+  display: inline-block;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  margin-bottom: 24px;
+  transition: .15s;
+}
+.back-link:hover { color: var(--accent); }
+
+/* ─── Avatar ─── */
+.avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  background-size: cover;
+  background-position: center;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+.avatar.has-image { color: transparent; }
+
+.avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.avatar-preview-wrap {
+  position: relative;
+  width: 96px;
+  height: 96px;
+}
+
+.avatar-preview {
+  width: 96px;
+  height: 96px;
+  font-size: 34px;
+}
+
+.avatar-edit-btn {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: 3px solid var(--panel);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: .15s;
+  touch-action: manipulation;
+}
+.avatar-edit-btn:hover { transform: translateY(-1px); }
+
+.avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  margin-top: 14px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn.danger { color: #ff6b6b; }
+
+.avatar-url-row {
+  width: 100%;
+  margin-top: 14px;
+}
+.avatar-url-row input {
+  background: var(--input);
+  border: 1.5px solid var(--border);
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: white;
+  outline: none;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  transition: .2s;
+}
+.avatar-url-row input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(92, 111, 255, .15);
+}
+
+/* ─── Status-Textarea + Zeichenzähler ─── */
+textarea#status-input {
+  background: var(--input);
+  border: 1.5px solid var(--border);
+  padding: 14px;
+  border-radius: 14px;
+  color: white;
+  outline: none;
+  font-size: 15px;
+  font-family: inherit;
+  resize: none;
+  transition: .2s;
+  width: 100%;
+}
+textarea#status-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(92, 111, 255, .15);
+}
+
+.char-count {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+  margin-top: 6px;
+}
+
+/* ─── Erfolgsmeldung ─── */
+.success-msg {
+  background: rgba(80, 220, 140, .12);
+  border: 1px solid rgba(80, 220, 140, .3);
+  color: #4ade80;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 520px) {
+  .avatar-preview-wrap, .avatar-preview { width: 84px; height: 84px; }
+  .avatar-preview { font-size: 30px; }
+}
