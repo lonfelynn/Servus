@@ -13,8 +13,8 @@ MIN_PASSWORD_LENGTH = 8
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$")
 
-@limiter.limit("10 per minute")
 @auth_bp.route("/register", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def register():
     if request.method == "POST":
         data     = request.get_json()
@@ -49,8 +49,8 @@ def register():
     return render_template("register.html")
 
 
-@limiter.limit("5 per minute")
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute")
 def login():
     if request.method == "POST":
         data     = request.get_json()

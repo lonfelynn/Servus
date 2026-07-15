@@ -90,7 +90,11 @@ if not app.secret_key:
 # Session & Cookie Sicherheit
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SECURE"]   = True
+# Secure cookies require HTTPS. Over plain http://localhost the browser silently
+# drops a Secure cookie, which would break login in local dev — so this is
+# opt-in via env (set SESSION_COOKIE_SECURE=1 behind HTTPS in production).
+app.config["SESSION_COOKIE_SECURE"] = \
+    os.environ.get("SESSION_COOKIE_SECURE", "0").lower() in ("1", "true", "yes")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=2)
 
 socketio = SocketIO(app, cors_allowed_origins="*")
