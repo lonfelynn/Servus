@@ -332,7 +332,7 @@
 <script>
   window.SERVUS = { me: {{ user_id }}, myName: {{ username | tojson }} };
 </script>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/themes/soeder.js') }}"></script>
 <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/icons.js') }}"></script>

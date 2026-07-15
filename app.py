@@ -1,5 +1,6 @@
 # app.py
 import os
+import json
 import time
 import atexit
 import uuid
@@ -52,6 +53,46 @@ from dotenv import load_dotenv
 from extensions import limiter
 
 load_dotenv()
+
+# Söder-Theme quotes: a one-time snapshot scraped from the (Anubis-protected)
+# Zitatsuchmaschine and stored locally. See tools/scrape-soeder-quotes.js.
+SOEDER_QUOTES_FILE = os.path.join(os.path.dirname(__file__), "data", "soeder_quotes.json")
+# Mirrors the built-in list in soeder.js so the endpoint always returns
+# something usable even if the snapshot file is missing or empty.
+SOEDER_FALLBACK_QUOTES = [
+    "Mia san mia!", "Servus beinand!", "Passt scho.", "A gmahde Wiesn.",
+    "Grüß Gott!", "Des basd!", "Bavaria one!", "Host mi?",
+]
+_soeder_quotes_cache = None
+
+
+def load_soeder_quotes():
+    """Reads and normalizes the quote snapshot once, then caches it in memory.
+    Accepts either a list of strings or a list of {"text": ...} objects, and
+    falls back to SOEDER_FALLBACK_QUOTES on any error / empty file."""
+    global _soeder_quotes_cache
+    if _soeder_quotes_cache is not None:
+        return _soeder_quotes_cache
+
+    quotes = []
+    try:
+        with open(SOEDER_QUOTES_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        for item in data:
+            if isinstance(item, str):
+                text = item.strip()
+            elif isinstance(item, dict):
+                text = (item.get("text") or item.get("quote") or "").strip()
+            else:
+                text = ""
+            if text:
+                quotes.append(text)
+    except (OSError, ValueError):
+        quotes = []
+
+    _soeder_quotes_cache = quotes or list(SOEDER_FALLBACK_QUOTES)
+    return _soeder_quotes_cache
+
 
 # Max length of the single intro message a requester may attach to a request.
 FRIEND_INTRO_MAX_LEN = 2048
@@ -107,8 +148,11 @@ def add_security_headers(response):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "style-src 'self' https://fonts.googleapis.com; "
-        "font-src https://fonts.gstatic.com; "
+        # 'unsafe-inline' is needed because the templates use inline style="…"
+        # attributes throughout; without it the browser drops all inline styling.
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        # Socket.IO is now self-hosted (static/js/vendor), so no CDN host needed.
         "script-src 'self' 'unsafe-inline'"
     )
     return response
@@ -223,6 +267,14 @@ def api_unlock_theme():
     """Kauft den Nutzer für Level-Kosten dauerhaft aus dem Söder-Theme frei."""
     result = unlock_soeder_theme(session["user_id"])
     return jsonify(result), (200 if result.get("ok") else 400)
+
+
+@app.route("/api/soeder/quotes")
+@login_required
+def api_soeder_quotes():
+    """Serves the local Söder-quote snapshot (same-origin, so CSP-safe).
+    soeder.js fetches this to fill the theme's floating quotes / speech bubbles."""
+    return jsonify(load_soeder_quotes())
 
 
 @app.route("/api/users")

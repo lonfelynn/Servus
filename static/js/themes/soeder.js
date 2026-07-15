@@ -11,9 +11,11 @@
 (function () {
   "use strict";
 
-  // Locker-bayerische Sprüche – bewusst generische Grüße/Redewendungen,
-  // keine erfundenen Zitate, die einer realen Person untergeschoben werden.
-  const QUOTES = [
+  // Eingebaute Fallback-Sprüche – bewusst generische Grüße/Redewendungen.
+  // Beim Aktivieren werden diese durch den echten Zitat-Snapshot vom Server
+  // ersetzt (GET /api/soeder/quotes), sofern verfügbar. Schlägt der Abruf
+  // fehl, bleibt diese Liste in Gebrauch, sodass das Theme nie leer ist.
+  let QUOTES = [
     "Mia san mia!",
     "Servus beinand!",
     "Passt scho.",
@@ -28,35 +30,23 @@
     "Host mi?",
   ];
 
-  // Kleines Cartoon-Maskottchen (kein echtes Foto) – Anzug, Krawatte, Brille.
-  const MASCOT_SVG = `
-    <svg class="soeder-svg" viewBox="0 0 120 150" width="100%" height="100%"
-         xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <!-- Anzug -->
-      <path d="M18 150 V118 a42 42 0 0 1 84 0 V150 Z" fill="#1f2a3a"/>
-      <path d="M60 108 L44 150 H52 L60 122 L68 150 H76 Z" fill="#f4f6fa"/>
-      <path d="M60 110 L54 128 L60 140 L66 128 Z" fill="#0098d8"/>
-      <!-- Hals -->
-      <rect x="50" y="92" width="20" height="20" rx="6" fill="#e9b58f"/>
-      <!-- Kopf -->
-      <ellipse cx="60" cy="64" rx="30" ry="33" fill="#f0c19a"/>
-      <!-- Ohren -->
-      <circle cx="31" cy="66" r="6" fill="#e9b58f"/>
-      <circle cx="89" cy="66" r="6" fill="#e9b58f"/>
-      <!-- Haare -->
-      <path d="M30 56 q0 -34 30 -34 q30 0 30 34 q-8 -16 -30 -16 q-22 0 -30 16 Z" fill="#6b5842"/>
-      <!-- Brille -->
-      <g stroke="#2a2a2a" stroke-width="2.5" fill="none">
-        <rect x="38" y="58" width="18" height="14" rx="5"/>
-        <rect x="64" y="58" width="18" height="14" rx="5"/>
-        <line x1="56" y1="64" x2="64" y2="64"/>
-      </g>
-      <!-- Augen -->
-      <circle cx="47" cy="65" r="2.4" fill="#26313f"/>
-      <circle cx="73" cy="65" r="2.4" fill="#26313f"/>
-      <!-- Lächeln -->
-      <path d="M48 80 q12 10 24 0" stroke="#a15c3d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    </svg>`;
+  // Echten Zitat-Snapshot laden und die Fallback-Liste ersetzen. Same-origin,
+  // daher CSP-konform. Fehler werden ignoriert (Fallback bleibt bestehen).
+  function loadQuotes() {
+    fetch("/api/soeder/quotes", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((list) => {
+        if (Array.isArray(list)) {
+          const clean = list.filter((q) => typeof q === "string" && q.trim());
+          if (clean.length) QUOTES = clean;
+        }
+      })
+      .catch(() => { /* Fallback-Sprüche behalten. */ });
+  }
+
+  // Söder-Maskottchen: echtes Foto aus static/img.
+  const MASCOT_IMG =
+    `<img class="soeder-photo" src="/static/img/Markus-Soeder.jpg" alt="Markus Söder">`;
 
   let bgLayer = null;
   let figureLayer = null;
@@ -104,7 +94,7 @@
     speech.className = "soeder-speech";
     speech.textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
 
-    wrap.innerHTML = MASCOT_SVG;
+    wrap.innerHTML = MASCOT_IMG;
     wrap.appendChild(speech);
     figureLayer.appendChild(wrap);
 
@@ -120,6 +110,8 @@
   function activate() {
     if (active) return;
     active = true;
+
+    loadQuotes();  // echten Snapshot holen; Fallback bleibt bis dahin aktiv
 
     bgLayer = document.createElement("div");
     bgLayer.id = "soeder-bg";
