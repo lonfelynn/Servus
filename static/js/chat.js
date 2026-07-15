@@ -174,21 +174,24 @@ removeFriendModal.addEventListener("click", (e) => {
 const friendsSidebar = document.getElementById("friends-sidebar");
 const friendsSearchInput = document.getElementById("friends-search-input");
 
-document.getElementById("friends-btn").addEventListener("click", () => {
+function showFriendsSidebar() {
   document.getElementById("sidebar").classList.add("hidden");
   friendsSidebar.classList.remove("hidden");
-});
+  friendsSidebar.style.display = "flex";
+}
 
-document.getElementById("back-to-chats-friends-btn").addEventListener("click", () => {
+function hideFriendsSidebar() {
   friendsSidebar.classList.add("hidden");
+  friendsSidebar.style.display = "none";
   document.getElementById("sidebar").classList.remove("hidden");
-});
+}
+
+document.getElementById("friends-btn").addEventListener("click", showFriendsSidebar);
+
+document.getElementById("back-to-chats-friends-btn").addEventListener("click", hideFriendsSidebar);
 
 friendsSidebar.addEventListener("click", (e) => {
-  if (e.target === friendsSidebar) {
-    friendsSidebar.classList.add("hidden");
-    document.getElementById("sidebar").classList.remove("hidden");
-  }
+  if (e.target === friendsSidebar) hideFriendsSidebar();
 });
 
 friendsSidebar.addEventListener("keyup", () => {
