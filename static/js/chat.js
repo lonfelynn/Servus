@@ -274,63 +274,99 @@ function renderMessage(msg) {
 
   const row = document.createElement("div");
   row.className = `row ${mine ? "sent" : "received"}`;
-  // data-Attribute ermöglichen gezielte DOM-Lookups bei edit/delete-Events.
   row.dataset.id     = msg.id;
   row.dataset.chatId = msg.chat_id;
 
   const bubbleClass = "bubble";
   let bubbleContent = "";
-  
+
   if (!msg.is_deleted) {
     bubbleContent = escapeHtml(msg.content);
     if (msg.file_url) {
       const br = msg.content ? "<br>" : "";
       if (msg.file_type === "image") {
-         bubbleContent += `${br}<img class="message-img" src="${escapeHtml(msg.file_url)}" alt="Attachment">`;
+        bubbleContent += `${br}<img src="${escapeHtml(msg.file_url)}" alt="Attachment" style="max-width: 100%; border-radius: 8px; margin-top: 5px;">`;
       } else if (msg.file_type === "video") {
-         bubbleContent += `${br}<video class="message-video" src="${escapeHtml(msg.file_url)}" controls></video>`;
+        bubbleContent += `${br}<video src="${escapeHtml(msg.file_url)}" controls style="max-width: 100%; border-radius: 8px; margin-top: 5px;"></video>`;
       } else {
-         bubbleContent += `${br}<a href="${escapeHtml(msg.file_url)}" target="_blank" class="file-link" style="color: inherit; text-decoration: underline;">${ICONS.attach} ${escapeHtml(msg.file_name || "Download")}</a>`;
+        bubbleContent += `${br}<a href="${escapeHtml(msg.file_url)}" target="_blank" class="file-link" style="color: inherit; text-decoration: underline;">${ICONS.attach} ${escapeHtml(msg.file_name || "Download")}</a>`;
       }
     }
   }
+
   let readStatusHtml = "";
   if (mine && !msg.is_deleted) {
-      if (msg.read_count >= msg.expected_read_count && msg.expected_read_count > 0) {
-          readStatusHtml = `<span class="read-status read" style="margin-left: 5px; color: #4CAF50;">${ICONS.checkDouble}</span>`;
-      } else {
-          readStatusHtml = `<span class="read-status" style="margin-left: 5px; opacity: 0.6;">${ICONS.check}</span>`;
-      }
+    if (msg.read_count >= msg.expected_read_count && msg.expected_read_count > 0) {
+      readStatusHtml = `<span class="read-status read" style="margin-left: 5px; color: #4CAF50;">${ICONS.checkDouble}</span>`;
+    } else {
+      readStatusHtml = `<span class="read-status" style="margin-left: 5px; opacity: 0.6;">${ICONS.check}</span>`;
+    }
   }
-  
-  
+
   row.innerHTML = `
     ${showSender ? `<div class="sender">${escapeHtml(msg.sender_name || "")}</div>` : ""}
     ${msg.is_deleted ? `<div class="edited-marker">(gelöscht)</div>` : `<div class="${bubbleClass}">${bubbleContent}</div>`}
     ${(!msg.is_deleted && msg.edited_at) ? `<div class="edited-marker">(bearbeitet)</div>` : ""}
     <div class="time">${formatTime(msg.sent_at)}${readStatusHtml}</div>
-    ${(mine && !msg.is_deleted) ? `
+    ${!msg.is_deleted ? `
     <div class="msg-actions">
-      <button class="msg-btn msg-edit-btn"   title="Bearbeiten">${ICONS.edit}</button>
-      <button class="msg-btn msg-delete-btn" title="Löschen">${ICONS.trash}</button>
+      <button class="msg-actions-trigger" title="Optionen">⋯</button>
+      <div class="msg-dropdown"></div>
     </div>` : ""}
   `;
 
-  if (mine && !msg.is_deleted)  {
-    row.querySelector(".msg-edit-btn").addEventListener("click", () => {
-      // Bereits im Bearbeitungsmodus → nichts tun.
-      if (row.querySelector(".edit-input")) return;
-      // textContent der Bubble ist der unescapte Original-Text.
-      const currentContent = row.querySelector(".bubble").textContent;
-      startEditMessage(msg.id, msg.chat_id, currentContent, row);
-    });
+  if (!msg.is_deleted) {
+    const trigger  = row.querySelector(".msg-actions-trigger");
+    const dropdown = row.querySelector(".msg-dropdown");
+    buildMsgDropdown(dropdown, msg, row, mine);
 
-    row.querySelector(".msg-delete-btn").addEventListener("click", () => {
-      deleteMessage(msg.id, msg.chat_id);
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wasOpen = dropdown.classList.contains("open");
+      closeAllMsgDropdowns();
+      if (!wasOpen) dropdown.classList.add("open");
     });
   }
 
   messagesEl.appendChild(row);
+}
+
+function closeAllMsgDropdowns() {
+  messagesEl.querySelectorAll(".msg-dropdown.open").forEach(d => d.classList.remove("open"));
+}
+document.addEventListener("click", closeAllMsgDropdowns);
+
+// Baut den Inhalt eines Dropdowns für eine einzelne Nachricht.
+function buildMsgDropdown(dropdown, msg, row, mine) {
+  dropdown.innerHTML = "";
+
+  const addItem = (label, onClick, danger = false) => {
+    const btn = document.createElement("button");
+    if (danger) btn.className = "danger";
+    btn.textContent = label;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeAllMsgDropdowns();
+      onClick();
+    });
+    dropdown.appendChild(btn);
+  };
+
+  addItem("↩  Antworten", () => replyToMessage(msg));
+  addItem("➜  Weiterleiten", () => openForwardModal(msg));
+  if (msg.content) {
+    addItem("⧉  Kopieren", () => copyMessage(msg.content));
+  }
+
+  if (mine) {
+    dropdown.appendChild(document.createElement("hr"));
+    addItem("✎  Bearbeiten", () => {
+      if (row.querySelector(".edit-input")) return;
+      const currentContent = row.querySelector(".bubble").textContent;
+      startEditMessage(msg.id, msg.chat_id, currentContent, row);
+    });
+    addItem("✕  Löschen", () => deleteMessage(msg.id, msg.chat_id), true);
+  }
 }
 
 // ── Nachricht senden ──────────────────────────────────────
@@ -345,17 +381,24 @@ function canSendNow() {
 }
 
 async function sendMessage() {
-  const text = msgInput.value.trim();
-  if (!text && !selectedFile) return;
+  const text0 = msgInput.value.trim();
+  if (!text0 && !selectedFile) return;
   if (activeChatId === null) return;
   if (!canSendNow()) {
     showRateNotice();
-    return;   // Text bleibt im Eingabefeld erhalten
+    return;
   }
+
+  let text = text0;
+  if (replyTarget) {
+    const quoted = truncate(replyTarget.content, 80).replace(/\n/g, " ");
+    text = `↩ ${replyTarget.sender_name}: "${quoted}"\n${text0}`;
+  }
+
   let file_url = null;
   let file_type = null;
   let file_name = null;
-  
+
   if (selectedFile) {
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -375,8 +418,8 @@ async function sendMessage() {
       return;
     }
   }
-  socket.emit("send_message", { 
-    chat_id: activeChatId, 
+  socket.emit("send_message", {
+    chat_id: activeChatId,
     content: text,
     file_url: file_url,
     file_type: file_type,
@@ -385,6 +428,8 @@ async function sendMessage() {
   msgInput.value = "";
   msgInput.style.height = "auto";
   clearFile();
+  replyTarget = null;
+  renderReplyBar();
   msgInput.focus();
 }
 
@@ -917,6 +962,112 @@ async function deleteMessage(msgId, chatId) {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// ── Kopieren ────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+function copyMessage(text) {
+  navigator.clipboard?.writeText(text);
+  showToast("In Zwischenablage kopiert");
+}
+
+function showToast(text) {
+  let toast = document.getElementById("msg-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "msg-toast";
+    toast.className = "msg-toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove("show"), 1400);
+}
+
+// ════════════════════════════════════════════════════════════
+// ── Antworten (client-seitig, zitiert den Originaltext) ──────
+// ════════════════════════════════════════════════════════════
+let replyTarget = null;
+
+function replyToMessage(msg) {
+  const previewText = msg.content || (msg.file_name ? `📎 ${msg.file_name}` : "Anhang");
+  replyTarget = {
+    chat_id: msg.chat_id,
+    content: previewText,
+    sender_name: msg.sender_id === ME ? "Dir" : (msg.sender_name || "Nachricht"),
+  };
+  renderReplyBar();
+  msgInput.focus();
+}
+
+function renderReplyBar() {
+  let bar = document.getElementById("reply-bar");
+  if (!replyTarget) {
+    if (bar) bar.remove();
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "reply-bar";
+    bar.className = "reply-bar";
+    document.querySelector(".input-area").insertBefore(bar, document.querySelector(".input-row"));
+  }
+  bar.innerHTML = `
+    <div class="reply-bar-text"><b>${escapeHtml(replyTarget.sender_name)}:</b> ${escapeHtml(truncate(replyTarget.content, 60))}</div>
+    <button class="reply-bar-close" title="Abbrechen">${ICONS.close}</button>
+  `;
+  bar.querySelector(".reply-bar-close").addEventListener("click", () => {
+    replyTarget = null;
+    renderReplyBar();
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// ── Weiterleiten ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+function openForwardModal(msg) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const chatOptions = Object.values(chatsById).map(c => `
+    <div class="forward-item" data-id="${c.id}">
+      <div class="avatar">${escapeHtml(c.display_name.charAt(0))}</div>
+      <div class="user-info"><div class="user-name">${escapeHtml(c.display_name)}</div></div>
+    </div>
+  `).join("") || `<div class="empty-list">Keine Chats zum Weiterleiten vorhanden.</div>`;
+
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Weiterleiten an …</div>
+      <div class="forward-list">${chatOptions}</div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="forward-cancel-btn">Abbrechen</button>
+      </div>
+    </div>
+  `;
+
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector("#forward-cancel-btn").addEventListener("click", () => overlay.remove());
+  overlay.querySelectorAll(".forward-item").forEach(item => {
+    item.addEventListener("click", () => {
+      forwardMessage(msg, Number(item.dataset.id));
+      overlay.remove();
+    });
+  });
+
+  document.body.appendChild(overlay);
+}
+
+function forwardMessage(msg, targetChatId) {
+  socket.emit("send_message", {
+    chat_id: targetChatId,
+    content: msg.content || "",
+    file_url: msg.file_url || null,
+    file_type: msg.file_type || null,
+    file_name: msg.file_name || null,
+  });
+  showToast("Nachricht weitergeleitet");
+}
 // ─── Eingehende edit/delete-Events (Echtzeit) ─────────────
 
 socket.on("message_edited", (msg) => {
