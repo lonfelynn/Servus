@@ -127,22 +127,39 @@ def get_conversation(user_a: int, user_b: int):
             (user_a, user_b, user_b, user_a)
         )
         return cursor.fetchall()
+def calculate_level(total_xp: int) -> int:
+    BASE_XP = 100
+    XP_GROWTH = 1.5
+    level = 1
+    xp_required = BASE_XP
+    remaining_xp = total_xp
+
+    while remaining_xp >= xp_required:
+        remaining_xp -= xp_required
+        level += 1
+        xp_required = int(xp_required * XP_GROWTH)
+
+    return level
 
 
 def add_message_xp(user_id: int):
     """Awards XP for sending a message and recalculates the level."""
     with get_connection() as connection:
         cursor = connection.cursor()
+
         cursor.execute(
             "UPDATE users SET xp = xp + %s WHERE id = %s RETURNING xp",
             (XP_PER_MESSAGE, user_id)
         )
+
         new_xp = cursor.fetchone()["xp"]
-        new_level = new_xp // XP_PER_LEVEL + 1
+        new_level = calculate_level(new_xp)
+
         cursor.execute(
             "UPDATE users SET level = %s WHERE id = %s",
             (new_level, user_id)
         )
+
         return {"xp": new_xp, "level": new_level}
 
 # ── Notifications ──────────────────────────────────────────
