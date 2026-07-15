@@ -152,12 +152,17 @@ function chatSubline(chat) {
   return chat.is_group ? chat.members.length + " Mitglieder" : "Direktnachricht";
 }
 
-// Aktualisiert die letzte-Nachricht-Vorschau eines Chats in der Sidebar.
+// Aktualisiert die letzte-Nachricht-Vorschau eines Chats in der Sidebar und
+// hebt den Chat mit der neuesten Nachricht an den Anfang der Liste.
 function updateChatPreview(chatId, content) {
   const chat = chatsById[chatId];
   if (chat) chat.last_message = content;
-  const subEl = chatListEl.querySelector(`.user-item[data-id="${chatId}"] .user-sub`);
+  const item = chatListEl.querySelector(`.user-item[data-id="${chatId}"]`);
+  if (!item) return;
+  const subEl = item.querySelector(".user-sub");
   if (subEl && chat) subEl.textContent = chatSubline(chat);
+  // Neueste Aktivität nach oben: Item an den Listenanfang verschieben.
+  if (chatListEl.firstElementChild !== item) chatListEl.prepend(item);
 }
 
 // ── Chat-Liste laden ──────────────────────────────────────
@@ -222,19 +227,21 @@ async function openChat(chatId) {
     ? chat.members.map(m => m.username).join(", ")
     : "Direktnachricht";
 
+  // Anzahl ungelesener Nachrichten VOR dem markChatRead-Aufruf merken,
+  // damit wir wissen, wo der „Neue Nachrichten"-Trenner hingehört.
+  const unreadCount = unreadByChat[chatId] || 0;
+
   const res = await fetch(`/api/chats/${chatId}/messages`);
   const messages = await res.json();
   messagesEl.innerHTML = "";
   messages.forEach(renderMessage);
 
-  // Chats mit ungelesenen Nachrichten öffnen bei der ältesten ungelesenen
-  // Nachricht statt ganz unten, damit der Nutzer sie erst lesen kann.
-  const unreadCount = unreadByChat[chatId] || 0;
-  if (unreadCount > 0 && messages.length > 0) {
-    scrollToMessageIndex(Math.max(0, messages.length - unreadCount));
-  } else {
-    scrollToBottom();
-  }
+  // Chats mit ungelesenen Nachrichten öffnen mit einem „Neue Nachrichten"-Trenner
+  // vor der ältesten ungelesenen Nachricht und scrollen dorthin, damit der Nutzer
+  // die neuen Nachrichten erst lesen kann statt ganz unten zu landen.
+  const separator = insertNewMessagesSeparator(messages, unreadCount);
+  if (separator) separator.scrollIntoView({ block: "center" });
+  else scrollToBottom();
   msgInput.focus();
 
   // Nur als gelesen markieren, wenn wir tatsächlich ganz unten stehen —
@@ -242,15 +249,6 @@ async function openChat(chatId) {
   // vollständig zur neuesten Nachricht runtergescrollt hat.
   if (isScrolledToBottom()) markChatRead(chatId, true);
   if (window.showChatMobile) window.showChatMobile();
-}
-
-// Scrollt den Nachrichten-Container so, dass die Nachricht am gegebenen
-// Index (0-basiert, älteste zuerst) oben sichtbar wird.
-function scrollToMessageIndex(index) {
-  const rows = messagesEl.querySelectorAll(".row");
-  const row = rows[index];
-  if (row) row.scrollIntoView({ block: "start" });
-  else scrollToBottom();
 }
 
 // Ist der Nachrichten-Container (annähernd) bis zum Ende runtergescrollt?
@@ -367,6 +365,30 @@ function buildMsgDropdown(dropdown, msg, row, mine) {
     });
     addItem("✕  Löschen", () => deleteMessage(msg.id, msg.chat_id), true);
   }
+}
+
+// Fügt einen „Neue Nachrichten"-Trenner vor der ersten ungelesenen eingehenden
+// Nachricht ein und gibt das Trenner-Element zurück (oder null, wenn keiner nötig).
+function insertNewMessagesSeparator(messages, unreadCount) {
+  if (unreadCount <= 0) return null;
+
+  // Von hinten die fremden Nachrichten zählen, bis wir die erste ungelesene haben.
+  let firstUnreadId = null;
+  let seen = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].sender_id === ME) continue;
+    if (++seen === unreadCount) { firstUnreadId = messages[i].id; break; }
+  }
+  if (firstUnreadId === null) return null;
+
+  const row = messagesEl.querySelector(`.row[data-id="${firstUnreadId}"]`);
+  if (!row) return null;
+
+  const sep = document.createElement("div");
+  sep.className = "new-messages-separator";
+  sep.innerHTML = `<span>Neue Nachrichten</span>`;
+  messagesEl.insertBefore(sep, row);
+  return sep;
 }
 
 // ── Nachricht senden ──────────────────────────────────────

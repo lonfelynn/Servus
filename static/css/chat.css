@@ -273,6 +273,31 @@ svg.icon {
 }
 .time { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
+/* „Neue Nachrichten"-Trenner: volle Breite, zentrierte Beschriftung mit Linien. */
+.new-messages-separator {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+}
+.new-messages-separator::before,
+.new-messages-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--accent);
+  opacity: 0.35;
+}
+.new-messages-separator span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
 @keyframes pop {
   from { opacity: 0; transform: translateY(6px) scale(.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
