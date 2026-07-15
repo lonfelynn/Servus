@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profil – Servus</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+</head>
+
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+  <div class="orb orb4"></div>
+</div>
+
+<div class="page">
+  <div class="panel profile-panel">
+
+    <a href="/chat" class="back-link">← Zurück zum Chat</a>
+
+    <div class="logo">
+      <div class="logo-icon">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16a1 1 0 011 1v11a1 1 0 01-1 1H9l-5 4V5a1 1 0 011-1z"/></svg>
+      </div>
+      <div class="logo-text">Servus</div>
+    </div>
+
+    <h1>Dein Profil</h1>
+    <p class="subtitle">Benutzername, Profilbild und Status anpassen.</p>
+
+    <!-- Meldungen (versteckt bis etwas passiert) -->
+    <div id="error-msg" class="error-msg hidden"></div>
+    <div id="success-msg" class="success-msg hidden"></div>
+
+    <!-- ── Profilbild ── -->
+    <div class="avatar-section">
+      <div class="avatar-preview-wrap">
+        <div class="avatar avatar-preview" id="avatar-preview"></div>
+        <button type="button" class="avatar-edit-btn" id="avatar-edit-btn" title="Profilbild hochladen">✎</button>
+      </div>
+      <input type="file" id="avatar-file-input" class="hidden"
+             accept="image/png,image/jpeg,image/gif,image/webp">
+
+      <div class="avatar-actions">
+        <button type="button" class="link-btn" id="avatar-url-toggle">Stattdessen Bild-URL verwenden</button>
+        <button type="button" class="link-btn danger" id="avatar-remove-btn">Bild entfernen</button>
+      </div>
+
+      <div class="avatar-url-row hidden" id="avatar-url-row">
+        <input type="text" id="avatar-url-input" placeholder="https://…">
+      </div>
+    </div>
+
+    <form id="profile-form">
+      <label>Benutzername</label>
+      <input type="text" id="username-input" placeholder="dein_name" maxlength="80" required>
+
+      <label>Status</label>
+      <textarea id="status-input" rows="2" maxlength="128"
+                placeholder="Was machst du gerade?"></textarea>
+      <div class="char-count" id="status-charcount">0 / 128</div>
+
+      <button type="submit" id="save-btn">Änderungen speichern</button>
+    </form>
+
+  </div>
+</div>
+
+<script>
+  window.SERVUS = { me: {{ user_id }}, myName: {{ username | tojson }} };
+</script>
+<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+
+</body>
+</html>
