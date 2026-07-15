@@ -39,6 +39,10 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SECURE"] = \
     os.environ.get("SESSION_COOKIE_SECURE", "0").lower() in ("1", "true", "yes")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=2)
+# Let the browser hold onto static assets (CSS/JS/images like the Söder mascot)
+# without revalidating on every page load. They are rarely changed; bump a file's
+# name if a hard refresh is ever needed.
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = timedelta(days=7)
 
 # ── Extensions ──────────────────────────────────────────────
 limiter.init_app(app)

@@ -44,9 +44,14 @@
       .catch(() => { /* Fallback-Sprüche behalten. */ });
   }
 
-  // Söder-Maskottchen: echtes Foto aus static/img.
-  const MASCOT_IMG =
-    `<img class="soeder-photo" src="/static/img/Markus-Soeder.png" alt="Markus Söder">`;
+  // Söder-Maskottchen: echtes Foto aus static/img. Das Bild wird genau einmal
+  // vorgeladen und danach bei jedem Auftauchen nur noch geklont – so löst kein
+  // erneuter Netzwerk-/Dekodier-Aufwand aus.
+  const MASCOT_SRC = "/static/img/Markus-Soeder.png";
+  const mascotTemplate = new Image();
+  mascotTemplate.className = "soeder-photo";
+  mascotTemplate.alt = "Markus Söder";
+  mascotTemplate.src = MASCOT_SRC;   // startet den Download sofort (Cache füllen)
 
   let bgLayer = null;
   let figureLayer = null;
@@ -94,7 +99,7 @@
     speech.className = "soeder-speech";
     speech.textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
 
-    wrap.innerHTML = MASCOT_IMG;
+    wrap.appendChild(mascotTemplate.cloneNode(false));
     wrap.appendChild(speech);
     figureLayer.appendChild(wrap);
 
