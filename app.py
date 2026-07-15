@@ -44,6 +44,11 @@ from models import (
     delete_friend_request,
     remove_friend,
 )
+from datetime import timedelta
+from dotenv import load_dotenv
+from extensions import limiter
+
+load_dotenv()
 
 # Max length of the single intro message a requester may attach to a request.
 FRIEND_INTRO_MAX_LEN = 2048
@@ -74,16 +79,32 @@ def _allow_message(user_id: int) -> bool:
 
 # ── App setup ───────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-in-production")
+# Secret Key
+app.secret_key = os.environ.get("SECRET_KEY")
+if not app.secret_key:
+    raise RuntimeError("SECRET_KEY ist nicht gesetzt!")
 
-# Keep users logged in across browser restarts: mark sessions permanent (see
-# auth.login) so Flask writes a cookie with an explicit expiry instead of a
-# session cookie that dies when the browser closes. The lifetime is refreshed on
-# every request (SESSION_REFRESH_EACH_REQUEST defaults to True), so an active
-# user stays logged in as long as they visit at least once within the window.
-app.permanent_session_lifetime = timedelta(days=30)
+# Session & Cookie Sicherheit
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"]   = True
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=2)
 
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+limiter.init_app(app)
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "style-src 'self' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; "
+        "script-src 'self' 'unsafe-inline'"
+    )
+    return response
 
 # ── Register blueprints ─────────────────────────────────────
 app.register_blueprint(auth_bp)
