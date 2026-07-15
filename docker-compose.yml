@@ -1,0 +1,22 @@
+# Personal Docker setup — not committed (see .gitignore).
+# Connects to an external PostgreSQL server (set DB_HOST etc. in .env).
+# Start with:  docker compose up --build
+# App: http://localhost:5000
+
+services:
+  web:
+    container_name: servus
+    image: servus-web
+    restart: unless-stopped
+    build: .
+    # All settings (SECRET_KEY, DB_HOST, DB_PORT, DB_NAME, DB_USER,
+    # DB_PASSWORD, DB_POOL_*) come from your .env file. HOST=0.0.0.0 is
+    # already baked into the image, so the app is reachable from outside.
+    # Point DB_HOST at the external Postgres IP. If that DB runs on the
+    # Docker host itself, use host.docker.internal instead of an IP.
+    env_file: .env
+    network_mode: host
+    # Bind-mount the source for quick edits (restart the container to apply).
+    # Remove this block for a fully self-contained production image.
+    volumes:
+      - .:/app
