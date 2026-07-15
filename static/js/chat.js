@@ -38,6 +38,28 @@ const fileInput    = document.getElementById("file-input");
 const attachBtn    = document.getElementById("attach-btn");
 const filePreview  = document.getElementById("file-preview");
 
+// ── Zitat-Marker für Antworten/Weiterleiten (unsichtbar im content codiert) ──
+const QUOTE_START = "\u0002Q\u0002";
+const QUOTE_END   = "\u0003Q\u0003";
+
+function parseQuote(content) {
+  if (!content || !content.startsWith(QUOTE_START)) return { quote: null, text: content };
+  const endIdx = content.indexOf(QUOTE_END);
+  if (endIdx === -1) return { quote: null, text: content };
+  try {
+    const quote = JSON.parse(content.slice(QUOTE_START.length, endIdx));
+    const text = content.slice(endIdx + QUOTE_END.length);
+    return { quote, text };
+  } catch (_) {
+    return { quote: null, text: content };
+  }
+}
+
+function buildQuotedContent(type, name, quotedText, actualText) {
+  const payload = JSON.stringify({ type, name, text: truncate(quotedText, 80) });
+  return QUOTE_START + payload + QUOTE_END + actualText;
+}
+
 let selectedFile = null;
 if (attachBtn) {
   attachBtn.addEventListener("click", () => fileInput.click());
@@ -189,7 +211,10 @@ friendsSidebar.addEventListener("input", () => {
 
 // Unterzeile eines Chat-Eintrags: gekürzte letzte Nachricht, sonst Fallback.
 function chatSubline(chat) {
-  if (chat.last_message) return truncate(chat.last_message, SIDEBAR_PREVIEW_MAX);
+  if (chat.last_message) {
+    const clean = parseQuote(chat.last_message).text;
+    return truncate(clean || "Anhang", SIDEBAR_PREVIEW_MAX);
+  }
   return chat.is_group ? chat.members.length + " Mitglieder" : "Direktnachricht";
 }
 
@@ -198,12 +223,8 @@ function chatSubline(chat) {
 function updateChatPreview(chatId, content) {
   const chat = chatsById[chatId];
   if (chat) chat.last_message = content;
-  const item = chatListEl.querySelector(`.user-item[data-id="${chatId}"]`);
-  if (!item) return;
-  const subEl = item.querySelector(".user-sub");
+  const subEl = chatListEl.querySelector(`.user-item[data-id="${chatId}"] .user-sub`);
   if (subEl && chat) subEl.textContent = chatSubline(chat);
-  // Neueste Aktivität nach oben: Item an den Listenanfang verschieben.
-  if (chatListEl.firstElementChild !== item) chatListEl.prepend(item);
 }
 
 // ── Chat-Liste laden ──────────────────────────────────────
@@ -316,17 +337,19 @@ function renderMessage(msg) {
   row.dataset.id     = msg.id;
   row.dataset.chatId = msg.chat_id;
 
+  const { quote, text: rawText } = msg.is_deleted ? { quote: null, text: "" } : parseQuote(msg.content);
+
   const bubbleClass = "bubble";
   let bubbleContent = "";
 
   if (!msg.is_deleted) {
-    bubbleContent = escapeHtml(msg.content);
+    bubbleContent = escapeHtml(rawText);
     if (msg.file_url) {
-      const br = msg.content ? "<br>" : "";
+      const br = rawText ? "<br>" : "";
       if (msg.file_type === "image") {
-        bubbleContent += `${br}<img src="${escapeHtml(msg.file_url)}" alt="Attachment" style="max-width: 600px; border-radius: 8px; margin-top: 5px;">`;
+        bubbleContent += `${br}<img src="${escapeHtml(msg.file_url)}" alt="Attachment" style="max-width: 100%; border-radius: 8px; margin-top: 5px;">`;
       } else if (msg.file_type === "video") {
-        bubbleContent += `${br}<video src="${escapeHtml(msg.file_url)}" controls style="max-width: 600px; border-radius: 8px; margin-top: 5px;"></video>`;
+        bubbleContent += `${br}<video src="${escapeHtml(msg.file_url)}" controls style="max-width: 100%; border-radius: 8px; margin-top: 5px;"></video>`;
       } else {
         bubbleContent += `${br}<a href="${escapeHtml(msg.file_url)}" target="_blank" class="file-link" style="color: inherit; text-decoration: underline;">${ICONS.attach} ${escapeHtml(msg.file_name || "Download")}</a>`;
       }
@@ -342,16 +365,24 @@ function renderMessage(msg) {
     }
   }
 
+  const quoteHtml = quote
+    ? `<div class="quote-block"><b>${quote.type === "forward" ? "➜ " : "↩ "}${escapeHtml(quote.name)}</b><span>${escapeHtml(quote.text)}</span></div>`
+    : "";
+
   row.innerHTML = `
     ${showSender ? `<div class="sender">${escapeHtml(msg.sender_name || "")}</div>` : ""}
-    ${msg.is_deleted ? `<div class="edited-marker">(gelöscht)</div>` : `<div class="${bubbleClass}">${bubbleContent}</div>`}
+    ${quoteHtml}
+    ${msg.is_deleted
+      ? `<div class="edited-marker">(gelöscht)</div>`
+      : `<div class="bubble-line">
+           <div class="${bubbleClass}">${bubbleContent}</div>
+           <div class="msg-actions">
+             <button class="msg-actions-trigger" title="Optionen">⋯</button>
+             <div class="msg-dropdown"></div>
+           </div>
+         </div>`}
     ${(!msg.is_deleted && msg.edited_at) ? `<div class="edited-marker">(bearbeitet)</div>` : ""}
     <div class="time">${formatTime(msg.sent_at)}${readStatusHtml}</div>
-    ${!msg.is_deleted ? `
-    <div class="msg-actions">
-      <button class="msg-actions-trigger" title="Optionen">⋯</button>
-      <div class="msg-dropdown"></div>
-    </div>` : ""}
   `;
 
   if (!msg.is_deleted) {
@@ -363,11 +394,33 @@ function renderMessage(msg) {
       e.stopPropagation();
       const wasOpen = dropdown.classList.contains("open");
       closeAllMsgDropdowns();
-      if (!wasOpen) dropdown.classList.add("open");
+      if (!wasOpen) {
+        positionDropdown(trigger, dropdown);
+        dropdown.classList.add("open");
+      }
     });
   }
 
   messagesEl.appendChild(row);
+}
+
+function closeAllMsgDropdowns() {
+  messagesEl.querySelectorAll(".msg-dropdown.open").forEach(d => d.classList.remove("open", "drop-up"));
+}
+document.addEventListener("click", closeAllMsgDropdowns);
+
+// Öffnet das Dropdown nach oben, wenn unten am Chatrand nicht genug Platz ist.
+function positionDropdown(trigger, dropdown) {
+  const ESTIMATED_HEIGHT = 220; // grobe Schätzung: max. 5 Einträge + Trenner + Padding
+  const rect = trigger.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+
+  if (spaceBelow < ESTIMATED_HEIGHT && spaceAbove > spaceBelow) {
+    dropdown.classList.add("drop-up");
+  } else {
+    dropdown.classList.remove("drop-up");
+  }
 }
 
 function closeAllMsgDropdowns() {
@@ -378,6 +431,7 @@ document.addEventListener("click", closeAllMsgDropdowns);
 // Baut den Inhalt eines Dropdowns für eine einzelne Nachricht.
 function buildMsgDropdown(dropdown, msg, row, mine) {
   dropdown.innerHTML = "";
+  const { text: rawText } = parseQuote(msg.content);
 
   const addItem = (label, onClick, danger = false) => {
     const btn = document.createElement("button");
@@ -391,10 +445,10 @@ function buildMsgDropdown(dropdown, msg, row, mine) {
     dropdown.appendChild(btn);
   };
 
-  addItem("↩  Antworten", () => replyToMessage(msg));
-  addItem("➜  Weiterleiten", () => openForwardModal(msg));
-  if (msg.content) {
-    addItem("⧉  Kopieren", () => copyMessage(msg.content));
+  addItem("↩  Antworten", () => replyToMessage(msg, rawText));
+  addItem("➜  Weiterleiten", () => forwardMessagePrompt(msg, rawText));
+  if (rawText) {
+    addItem("⧉  Kopieren", () => copyMessage(rawText));
   }
 
   if (mine) {
@@ -454,8 +508,7 @@ async function sendMessage() {
 
   let text = text0;
   if (replyTarget) {
-    const quoted = truncate(replyTarget.content, 80).replace(/\n/g, " ");
-    text = `↩ ${replyTarget.sender_name}: "${quoted}"\n${text0}`;
+    text = buildQuotedContent("reply", replyTarget.name, replyTarget.text, text0);
   }
 
   let file_url = null;
@@ -1115,16 +1168,15 @@ function showToast(text) {
 }
 
 // ════════════════════════════════════════════════════════════
-// ── Antworten (client-seitig, zitiert den Originaltext) ──────
+// ── Antworten ──────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
 let replyTarget = null;
 
-function replyToMessage(msg) {
-  const previewText = msg.content || (msg.file_name ? `📎 ${msg.file_name}` : "Anhang");
+function replyToMessage(msg, rawText) {
+  const previewText = rawText || (msg.file_name ? `📎 ${msg.file_name}` : "Anhang");
   replyTarget = {
-    chat_id: msg.chat_id,
-    content: previewText,
-    sender_name: msg.sender_id === ME ? "Dir" : (msg.sender_name || "Nachricht"),
+    name: msg.sender_id === ME ? "Dir" : (msg.sender_name || "Nachricht"),
+    text: previewText,
   };
   renderReplyBar();
   msgInput.focus();
@@ -1143,7 +1195,7 @@ function renderReplyBar() {
     document.querySelector(".input-area").insertBefore(bar, document.querySelector(".input-row"));
   }
   bar.innerHTML = `
-    <div class="reply-bar-text"><b>${escapeHtml(replyTarget.sender_name)}:</b> ${escapeHtml(truncate(replyTarget.content, 60))}</div>
+    <div class="reply-bar-text"><b>${escapeHtml(replyTarget.name)}:</b> ${escapeHtml(truncate(replyTarget.text, 60))}</div>
     <button class="reply-bar-close" title="Abbrechen">${ICONS.close}</button>
   `;
   bar.querySelector(".reply-bar-close").addEventListener("click", () => {
@@ -1155,7 +1207,7 @@ function renderReplyBar() {
 // ════════════════════════════════════════════════════════════
 // ── Weiterleiten ──────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
-function openForwardModal(msg) {
+function forwardMessagePrompt(msg, rawText) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
 
@@ -1180,7 +1232,7 @@ function openForwardModal(msg) {
   overlay.querySelector("#forward-cancel-btn").addEventListener("click", () => overlay.remove());
   overlay.querySelectorAll(".forward-item").forEach(item => {
     item.addEventListener("click", () => {
-      forwardMessage(msg, Number(item.dataset.id));
+      forwardMessage(msg, rawText, Number(item.dataset.id));
       overlay.remove();
     });
   });
@@ -1188,10 +1240,14 @@ function openForwardModal(msg) {
   document.body.appendChild(overlay);
 }
 
-function forwardMessage(msg, targetChatId) {
+function forwardMessage(msg, rawText, targetChatId) {
+  const originalName = msg.sender_id === ME ? "Dir" : (msg.sender_name || "Nachricht");
+  const previewText = rawText || (msg.file_name ? `📎 ${msg.file_name}` : "Anhang");
+  const content = buildQuotedContent("forward", originalName, previewText, rawText || "");
+
   socket.emit("send_message", {
     chat_id: targetChatId,
-    content: msg.content || "",
+    content: content,
     file_url: msg.file_url || null,
     file_type: msg.file_type || null,
     file_name: msg.file_name || null,
