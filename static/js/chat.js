@@ -283,9 +283,9 @@ function renderMessage(msg) {
     if (msg.file_url) {
       const br = msg.content ? "<br>" : "";
       if (msg.file_type === "image") {
-        bubbleContent += `${br}<img src="${escapeHtml(msg.file_url)}" alt="Attachment" style="max-width: 100%; border-radius: 8px; margin-top: 5px;">`;
+        bubbleContent += `${br}<img src="${escapeHtml(msg.file_url)}" alt="Attachment" style="max-width: 600px; border-radius: 8px; margin-top: 5px;">`;
       } else if (msg.file_type === "video") {
-        bubbleContent += `${br}<video src="${escapeHtml(msg.file_url)}" controls style="max-width: 100%; border-radius: 8px; margin-top: 5px;"></video>`;
+        bubbleContent += `${br}<video src="${escapeHtml(msg.file_url)}" controls style="max-width: 600px; border-radius: 8px; margin-top: 5px;"></video>`;
       } else {
         bubbleContent += `${br}<a href="${escapeHtml(msg.file_url)}" target="_blank" class="file-link" style="color: inherit; text-decoration: underline;">${ICONS.attach} ${escapeHtml(msg.file_name || "Download")}</a>`;
       }
