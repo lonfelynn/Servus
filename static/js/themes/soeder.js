@@ -46,7 +46,7 @@
 
   // Söder-Maskottchen: echtes Foto aus static/img.
   const MASCOT_IMG =
-    `<img class="soeder-photo" src="/static/img/Markus-Soeder.jpg" alt="Markus Söder">`;
+    `<img class="soeder-photo" src="/static/img/Markus-Soeder.png" alt="Markus Söder">`;
 
   let bgLayer = null;
   let figureLayer = null;
