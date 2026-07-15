@@ -5,7 +5,8 @@ from database import get_connection
 
 # ── Constants ──────────────────────────────────────────────
 XP_PER_MESSAGE = 10
-XP_PER_LEVEL   = 100
+BASE_XP = 100
+XP_GROWTH = 1.5
 
 
 # ── Password helpers ───────────────────────────────────────
@@ -128,8 +129,7 @@ def get_conversation(user_a: int, user_b: int):
         )
         return cursor.fetchall()
 def calculate_level(total_xp: int) -> int:
-    BASE_XP = 100
-    XP_GROWTH = 1.5
+    
     level = 1
     xp_required = BASE_XP
     remaining_xp = total_xp
@@ -141,6 +141,69 @@ def calculate_level(total_xp: int) -> int:
 
     return level
 
+def xp_for_level(level: int) -> int:
+    """
+    Returns the total XP required to reach the given level.
+    Level 1 requires 0 XP.
+    """
+    if level <= 1:
+        return 0
+
+    total = 0
+    xp_required = BASE_XP
+
+    for _ in range(2, level + 1):
+        total += xp_required
+        xp_required = int(xp_required * XP_GROWTH)
+
+    return total
+
+def spend_levels(user_id: int, levels: int):
+    if levels <= 0:
+        raise ValueError("Levels must be greater than 0.")
+
+    with get_connection() as connection:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            "SELECT xp, level FROM users WHERE id = %s",
+            (user_id,)
+        )
+        user = cursor.fetchone()
+        current_xp = user["xp"]
+        current_level = calculate_level(current_xp)
+        if user is None:
+            raise ValueError("User not found.")
+
+        current_level = user["level"]
+
+        if current_level <= levels:
+            return {
+                "success": False,
+                "xp": user["xp"],
+                "level": current_level
+            }
+
+        xp_cost = xp_for_level(current_level) - xp_for_level(current_level - levels)
+        new_xp = current_xp - xp_cost
+        new_level = calculate_level(new_xp)
+
+        cursor.execute(
+            """
+            UPDATE users
+            SET xp = %s,
+                level = %s
+            WHERE id = %s
+            """,
+            (new_xp, new_level, user_id)
+        )
+
+        return {
+            "success": True,
+            "xp": new_xp,
+            "level": new_level,
+            "spent_levels": levels
+        }
 
 def add_message_xp(user_id: int):
     """Awards XP for sending a message and recalculates the level."""
