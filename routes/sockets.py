@@ -11,6 +11,7 @@ from .constants import MESSAGE_MAX_LEN
 from extensions import socketio
 from models import (
     add_message_xp,
+    add_xp,
     create_chat_notifications,
     get_user_chat_ids,
     is_chat_member,
@@ -107,7 +108,9 @@ def on_send_message(data):
         return
 
     message = save_chat_message(chat_id, sender_id, content, file_url, file_type, file_name)
-    add_message_xp(sender_id)
+    lenght = len(content)
+    if length > 20:
+        add_xp(sender_id, min(5 + int(math.sqrt(length) / 2), 15))
     payload = chat_message_to_dict(message, sender_name=session.get("username", ""))
 
     # Persist an unread marker for every other member (survives a page reload).
