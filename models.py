@@ -276,16 +276,13 @@ def unlock_soeder_theme(user_id: int):
             (new_xp, new_level, user_id)
         )
     return {"ok": True, "level": new_level, "xp": new_xp, "cost": THEME_UNLOCK_COST}
-
-
-def add_message_xp(user_id: int):
-    """Awards XP for sending a message and recalculates the level."""
+def add_xp(user_id: int, amount: int):
     with get_connection() as connection:
         cursor = connection.cursor()
 
         cursor.execute(
             "UPDATE users SET xp = xp + %s WHERE id = %s RETURNING xp",
-            (XP_PER_MESSAGE, user_id)
+            (amount, user_id)
         )
 
         new_xp = cursor.fetchone()["xp"]
@@ -297,6 +294,9 @@ def add_message_xp(user_id: int):
         )
 
         return {"xp": new_xp, "level": new_level}
+
+def add_message_xp(user_id: int):
+    return {add_xp(user_id, XP_PER_MESSAGE)
 
 # ── Notifications ──────────────────────────────────────────
 def create_notification(recipient_id: int, sender_id: int, message_id: int):
