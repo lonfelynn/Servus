@@ -296,7 +296,7 @@ def add_xp(user_id: int, amount: int):
         return {"xp": new_xp, "level": new_level}
 
 def add_message_xp(user_id: int):
-    return {add_xp(user_id, XP_PER_MESSAGE)
+    return add_xp(user_id, XP_PER_MESSAGE)
 
 # ── Notifications ──────────────────────────────────────────
 def create_notification(recipient_id: int, sender_id: int, message_id: int):
@@ -560,15 +560,19 @@ def rename_chat(chat_id: int, name: "str | None"):
         )
 
 
-def save_chat_message(chat_id: int, sender_id: int, content: str, file_url: "str | None" = None, file_type: "str | None" = None, file_name: "str | None" = None):
-    """Stores a chat message and returns the created row."""
+def save_chat_message(chat_id: int, sender_id: int, content: str, file_url: "str | None" = None, file_type: "str | None" = None, file_name: "str | None" = None, kind: "str | None" = None):
+    """Stores a chat message and returns the created row.
+
+    kind='system' marks a server-generated notice ("X hat Y hinzugefügt"), which
+    is stored as plaintext — see sql/11.sql.
+    """
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
-            "INSERT INTO chat_messages (chat_id, sender_id, content, file_url, file_type, file_name) "
-            "VALUES (%s, %s, %s, %s, %s, %s) "
-            "RETURNING id, chat_id, sender_id, content, sent_at, file_url, file_type, file_name, edited_at, is_deleted",
-            (chat_id, sender_id, content, file_url, file_type, file_name)
+            "INSERT INTO chat_messages (chat_id, sender_id, content, file_url, file_type, file_name, kind) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+            "RETURNING id, chat_id, sender_id, content, sent_at, file_url, file_type, file_name, edited_at, is_deleted, kind",
+            (chat_id, sender_id, content, file_url, file_type, file_name, kind)
         )
         return cursor.fetchone()
 
@@ -580,7 +584,7 @@ def get_chat_conversation(chat_id: int):
         cursor.execute(
             """
             SELECT m.id, m.chat_id, m.sender_id, m.content, m.sent_at, m.edited_at, m.is_deleted,
-                    m.file_url, m.file_type, m.file_name,
+                    m.file_url, m.file_type, m.file_name, m.kind,
                    u.username AS sender_name,
                    (SELECT COUNT(*) FROM chat_notifications cn WHERE cn.message_id = m.id AND cn.is_read = TRUE) AS read_count,
                    (SELECT COUNT(*) FROM chat_members cm WHERE cm.chat_id = m.chat_id) - 1 AS expected_read_count
@@ -652,7 +656,8 @@ def update_chat_message(message_id: int, sender_id: int, new_content: str):
                    edited_at = NOW()
             WHERE  id        = %s
               AND  sender_id = %s
-            RETURNING id, chat_id, sender_id, content, sent_at, edited_at, is_deleted, file_url, file_type, file_name
+              AND  kind IS NULL
+            RETURNING id, chat_id, sender_id, content, sent_at, edited_at, is_deleted, file_url, file_type, file_name, kind
             """,
             (new_content, message_id, sender_id)
         )
@@ -677,6 +682,7 @@ def delete_chat_message(message_id: int, sender_id: int) -> bool:
                    content    = ''
             WHERE  id        = %s
               AND  sender_id = %s
+              AND  kind IS NULL
             """,
             (message_id, sender_id)
         )
@@ -888,4 +894,132 @@ def remove_friend(user_id: int, friend_id: int):
             (user_id, friend_id, friend_id, user_id)
         )
         return cursor.fetchone()
+
+
+# ── E2EE key storage ───────────────────────────────────────
+# The server is a dumb key *store* here, never a key *user*: it holds public
+# keys in the clear, private keys only in their password-wrapped form, and the
+# per-chat AES keys only wrapped with a member's public key. None of these
+# functions can produce a plaintext key — that only ever happens in the browser.
+
+def set_user_keys(user_id: int, public_key: str, private_key: str, key_salt: str) -> bool:
+    """Stores a user's key bundle — but only if they do not have one yet.
+
+    The `public_key IS NULL` guard makes this write-once: without it, anyone who
+    got hold of a session could swap in their own public key and have every chat
+    key re-wrapped for them, or wipe the bundle and destroy the user's history.
+    Returns False when a bundle already exists (nothing was overwritten).
+    """
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            UPDATE users
+            SET    public_key = %s, private_key = %s, key_salt = %s
+            WHERE  id = %s AND public_key IS NULL
+            """,
+            (public_key, private_key, key_salt, user_id)
+        )
+        return cursor.rowcount > 0
+
+
+def get_user_keys(user_id: int):
+    """The user's own bundle: public key + wrapped private key + PBKDF2 salt."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT public_key, private_key, key_salt FROM users WHERE id = %s",
+            (user_id,)
+        )
+        return cursor.fetchone()
+
+
+def get_public_key(user_id: int):
+    """A single user's public key (or None if they never logged in since E2EE)."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT public_key FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        return row["public_key"] if row else None
+
+
+def get_my_chat_keys(user_id: int):
+    """{chat_id: wrapped_key} for every chat the user has a key for.
+    Fetched once on page load so the sidebar previews can be decrypted."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT chat_id, wrapped_key FROM chat_keys WHERE user_id = %s",
+            (user_id,)
+        )
+        return {row["chat_id"]: row["wrapped_key"] for row in cursor.fetchall()}
+
+
+def get_chat_key(chat_id: int, user_id: int):
+    """The caller's own wrapped copy of a chat key, or None."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT wrapped_key FROM chat_keys WHERE chat_id = %s AND user_id = %s",
+            (chat_id, user_id)
+        )
+        row = cursor.fetchone()
+        return row["wrapped_key"] if row else None
+
+
+def chat_key_exists(chat_id: int) -> bool:
+    """Whether *anyone* holds a key for this chat. False means the chat has no
+    key yet and the first member to open it may generate one."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT 1 FROM chat_keys WHERE chat_id = %s LIMIT 1", (chat_id,))
+        return cursor.fetchone() is not None
+
+
+def get_members_without_key(chat_id: int):
+    """Members of the chat that have a public key but no wrapped chat key yet
+    — [{id, public_key}]. Any member who already holds the chat key wraps it
+    for these users (that is how a newly added member gets access)."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT u.id, u.public_key
+            FROM   chat_members cm
+            JOIN   users u ON u.id = cm.user_id
+            WHERE  cm.chat_id = %s
+              AND  u.public_key IS NOT NULL
+              AND  NOT EXISTS (SELECT 1 FROM chat_keys ck
+                                WHERE ck.chat_id = cm.chat_id AND ck.user_id = cm.user_id)
+            """,
+            (chat_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def add_chat_keys(chat_id: int, wrapped_by_user: dict) -> int:
+    """Stores wrapped chat keys for the given members. Insert-only:
+    `ON CONFLICT DO NOTHING` means an existing key can never be replaced, so a
+    member cannot lock others out by overwriting their copy with garbage — and
+    two clients racing to create the first key both end up on the winner's.
+    Rows for non-members are silently skipped. Returns the number inserted.
+    """
+    if not wrapped_by_user:
+        return 0
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        inserted = 0
+        for user_id, wrapped in wrapped_by_user.items():
+            cursor.execute(
+                """
+                INSERT INTO chat_keys (chat_id, user_id, wrapped_key)
+                SELECT %s, %s, %s
+                WHERE  EXISTS (SELECT 1 FROM chat_members
+                                WHERE chat_id = %s AND user_id = %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (chat_id, user_id, wrapped, chat_id, user_id)
+            )
+            inserted += cursor.rowcount
+        return inserted
 

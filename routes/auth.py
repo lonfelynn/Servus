@@ -69,7 +69,10 @@ def login():
         session["user_id"]  = user["id"]
         session["username"] = user["username"]
 
-        return jsonify({"ok": True, "redirect": "/chat"})
+        # user_id goes back to the client so login.js can set up / unlock the
+        # E2EE key bundle while it still has the password in hand — the server
+        # never gets to see the unwrapped key.
+        return jsonify({"ok": True, "redirect": "/chat", "user_id": user["id"]})
 
     return render_template("login.html")
 

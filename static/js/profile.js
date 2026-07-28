@@ -5,6 +5,7 @@ const profileModal        = document.getElementById("profile-modal");
 const profileAvatarEl     = document.getElementById("profile-avatar");
 const profileStatusInput  = document.getElementById("profile-status-input");
 const profilePresenceInput = document.getElementById("profile-presence-input");
+const profilePresenceDot  = document.getElementById("profile-presence-dot");
 const uploadAvatarBtn     = document.getElementById("upload-avatar-btn");
 const profileImageInput   = document.getElementById("profile-image-input");
 const profileSaveBtn      = document.getElementById("profile-save-btn");
@@ -58,6 +59,7 @@ async function loadProfileData() {
 function updateProfileUI() {
   profileStatusInput.value = profileData.status_text;
   profilePresenceInput.value = profileData.presence;
+  syncPresenceDot();
 
   if (profileData.avatar_url) {
     profileAvatarEl.style.backgroundImage = `url(${profileData.avatar_url})`;
@@ -73,6 +75,12 @@ function updateProfileUI() {
     meAvatarEl.textContent = window.SERVUS.myName.charAt(0);
   }
 }
+
+// Der farbige Punkt im Status-Feld ersetzt die früheren Emoji in den <option>s.
+function syncPresenceDot() {
+  profilePresenceDot.dataset.presence = profilePresenceInput.value;
+}
+profilePresenceInput.addEventListener("change", syncPresenceDot);
 
 // Profil-Modal öffnen
 function openProfileModal() {

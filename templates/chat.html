@@ -108,11 +108,19 @@
           <div class="chat-header-sub" id="peer-sub"></div>
         </div>
         <button class="icon-btn" id="chat-settings-btn" title="Chat verwalten">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 21a6.5 6.5 0 0113 0"/><circle cx="18" cy="9" r="2.6"/><path d="M15.7 13.8a5 5 0 016.3 4.8"/></svg>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.6 1.6 0 00.32 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.6 1.6 0 00-1.82-.32 1.6 1.6 0 00-.97 1.47V21a2 2 0 01-4 0v-.09a1.6 1.6 0 00-1.05-1.47 1.6 1.6 0 00-1.82.32l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.6 1.6 0 00.32-1.82 1.6 1.6 0 00-1.47-.97H3a2 2 0 010-4h.09A1.6 1.6 0 004.56 8.9a1.6 1.6 0 00-.32-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.6 1.6 0 001.82.32h.08a1.6 1.6 0 00.97-1.47V3a2 2 0 014 0v.09a1.6 1.6 0 00.97 1.47 1.6 1.6 0 001.82-.32l.06-.06a2 2 0 112.83 2.83l-.06.06a1.6 1.6 0 00-.32 1.82v.08a1.6 1.6 0 001.47.97H21a2 2 0 010 4h-.09a1.6 1.6 0 00-1.47.97z"/></svg>
         </button>
       </div>
 
-      <div class="messages" id="messages"></div>
+      <div class="messages-wrap">
+        <div class="messages" id="messages"></div>
+        <!-- Schwebt über den Nachrichten, sobald der Nutzer nicht ganz unten ist
+             (z. B. beim Öffnen eines Chats an der ältesten ungelesenen Nachricht). -->
+        <button type="button" class="jump-newest hidden" id="jump-newest">
+          <span id="jump-newest-label">Zu den neuesten</span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+        </button>
+      </div>
 
       <div class="input-area">
         <div class="rate-notice hidden" id="rate-notice"></div>
@@ -227,12 +235,16 @@
     <textarea id="profile-status-input" class="modal-input" rows="2" maxlength="128"
               placeholder="Mein Status…"></textarea>
     <div class="modal-label" style="margin-top: 16px;">Status</div>
-    <select id="profile-presence-input" class="modal-input" style="cursor: pointer;">
-      <option value="online">🟢 Online</option>
-      <option value="away">🟡 Abwesend</option>
-      <option value="busy">🔴 Beschäftigt</option>
-      <option value="offline">⚫ Offline</option>
-    </select>
+    <div class="select-wrap">
+      <span class="presence-dot" id="profile-presence-dot" data-presence="online"></span>
+      <select id="profile-presence-input" class="modal-input select-modern select-presence">
+        <option value="online">Online</option>
+        <option value="away">Abwesend</option>
+        <option value="busy">Beschäftigt</option>
+        <option value="offline">Offline</option>
+      </select>
+      <svg class="select-caret icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
     <div class="modal-actions" style="margin-top: 16px;">
       <button class="btn btn-ghost" id="profile-cancel-btn">Abbrechen</button>
       <button class="btn btn-primary" id="profile-save-btn">Speichern</button>
@@ -255,7 +267,7 @@
         <span class="theme-card-swatch theme-swatch-soeder"></span>
         <span class="theme-card-body">
           <span class="theme-card-name">Söder <span class="theme-card-tag">Standard</span></span>
-          <span class="theme-card-desc">Blau-weiße Rauten, schwebende Sprüche und ein Gruß aus Bayern.</span>
+          <span class="theme-card-desc">Blau-weiße Rauten und ein Gruß aus Bayern.</span>
         </span>
         <svg class="theme-card-check icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
@@ -336,6 +348,7 @@
 <script src="{{ url_for('static', filename='js/themes/soeder.js') }}"></script>
 <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/icons.js') }}"></script>
+<script src="{{ url_for('static', filename='js/crypto.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 <script src="{{ url_for('static', filename='js/profile.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>

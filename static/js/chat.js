@@ -27,6 +27,8 @@ const requestsListEl = document.getElementById("requests-list");
 const requestsBadge  = document.getElementById("requests-badge");
 const friendsListEl  = document.getElementById("friends-list");
 const messagesEl   = document.getElementById("messages");
+const jumpBtn      = document.getElementById("jump-newest");
+const jumpLabelEl  = document.getElementById("jump-newest-label");
 const placeholder  = document.getElementById("chat-placeholder");
 const chatView     = document.getElementById("chat-view");
 const peerNameEl   = document.getElementById("peer-name");
@@ -37,6 +39,196 @@ const sendBtn      = document.getElementById("send-btn");
 const fileInput    = document.getElementById("file-input");
 const attachBtn    = document.getElementById("attach-btn");
 const filePreview  = document.getElementById("file-preview");
+
+// ════════════════════════════════════════════════════════════
+// ── Ende-zu-Ende-Verschlüsselung ───────────────────────────
+// ════════════════════════════════════════════════════════════
+// Der Server speichert nur Chiffretext. Deshalb wird an genau zwei Stellen
+// übersetzt: alles, was hereinkommt (Verlauf, Live-Nachrichten, Sidebar-
+// Vorschau), wird sofort entschlüsselt — alles, was hinausgeht (senden,
+// bearbeiten), direkt davor verschlüsselt. Der Rest des Codes arbeitet
+// unverändert mit Klartext.
+
+let myPrivateKey = null;         // RSA-Privatschlüssel (nicht exportierbar)
+const chatKeys = {};             // chat_id → AES-Chatschlüssel
+
+const UNREADABLE = "🔒 Nicht entschlüsselbar";
+
+// Fragt das Passwort ab, wenn der Schlüssel lokal fehlt (anderer Browser,
+// gelöschte Browserdaten). Ohne ihn bleibt der Verlauf unlesbar.
+function askPassword() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-title">Nachrichten entsperren</div>
+        <div class="modal-label">Ende-zu-Ende verschlüsselt</div>
+        <p style="font-size: 14px; color: var(--muted); margin: 0;">
+          Deine Nachrichten liegen verschlüsselt auf dem Server. Gib dein
+          Passwort ein, um sie auf diesem Gerät zu entschlüsseln.
+        </p>
+        <input type="password" class="modal-input" id="unlock-input"
+               placeholder="Passwort" autocomplete="current-password">
+        <div class="modal-hint hidden" id="unlock-error"
+             style="text-align: left; color: #e5484d;"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="unlock-logout-btn">Abmelden</button>
+          <button class="btn btn-primary" id="unlock-btn">Entsperren</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector("#unlock-input");
+    const errorEl = overlay.querySelector("#unlock-error");
+    const submit = async () => {
+      const password = input.value;
+      if (!password) return;
+      try {
+        myPrivateKey = await E2EE.unlock(ME, password);
+        overlay.remove();
+        resolve(true);
+      } catch (_) {
+        errorEl.textContent = "Falsches Passwort.";
+        errorEl.classList.remove("hidden");
+        input.value = "";
+        input.focus();
+      }
+    };
+    overlay.querySelector("#unlock-btn").addEventListener("click", submit);
+    // Ohne Passwort gibt es keinen Weg an die Nachrichten — der einzige
+    // sinnvolle Ausweg aus diesem Dialog ist also das Abmelden.
+    overlay.querySelector("#unlock-logout-btn").addEventListener("click", async () => {
+      await fetch("/logout");
+      window.location.href = "/login";
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+    input.focus();
+  });
+}
+
+async function initCrypto() {
+  if (!E2EE.available) {
+    // crypto.subtle gibt es nur im sicheren Kontext (HTTPS oder localhost).
+    showToast("Verschlüsselung braucht HTTPS — Nachrichten bleiben gesperrt.");
+    return;
+  }
+  myPrivateKey = await E2EE.loadStored(ME);
+  if (!myPrivateKey) await askPassword();
+
+  // Alle Chatschlüssel in einem Rutsch holen, damit die Sidebar-Vorschauen
+  // sofort entschlüsselt werden können (statt ein Request pro Chat).
+  try {
+    const wrapped = await (await fetch("/api/chats/keys")).json();
+    await Promise.all(Object.entries(wrapped).map(async ([chatId, w]) => {
+      try {
+        chatKeys[chatId] = await E2EE.unwrapChatKey(w, myPrivateKey);
+      } catch (_) {
+        // Einzelner unbrauchbarer Schlüssel darf nicht alle anderen blockieren.
+      }
+    }));
+  } catch (_) {
+    // Ohne Chatschlüssel bleibt der Verlauf gesperrt, die App läuft weiter.
+  }
+}
+
+// Läuft sofort beim Laden der Seite an, damit jeder Schlüsselzugriff darauf
+// warten kann — egal ob er aus init() oder aus einem Socket-Event kommt.
+const cryptoReady = initCrypto();
+
+// Verpackt einen Chatschlüssel für die übergebenen Mitglieder und speichert ihn.
+// Zurück kommt die vom Server gespeicherte eigene Kopie — die kann von der
+// gerade gesendeten abweichen, wenn ein anderes Mitglied schneller war.
+async function postChatKeys(chatId, chatKey, members) {
+  const keys = {};
+  for (const m of members) {
+    keys[m.id] = await E2EE.wrapChatKey(chatKey, m.public_key);
+  }
+  const res = await fetch(`/api/chats/${chatId}/keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys }),
+  });
+  const data = await res.json();
+  return data.ok ? data.mine : null;
+}
+
+// Liefert den Chatschlüssel — aus dem Cache, vom Server, oder frisch erzeugt,
+// wenn der Chat noch gar keinen hat. null heißt: nicht entschlüsselbar.
+async function getChatKey(chatId) {
+  // Auf die Schlüsseleinrichtung warten: sonst käme eine Nachricht, die
+  // eintrifft während noch das Passwort abgefragt wird, als „nicht
+  // entschlüsselbar" im Verlauf an und bliebe dort auch stehen.
+  await cryptoReady;
+  if (chatKeys[chatId]) return chatKeys[chatId];
+  if (!myPrivateKey) return null;
+
+  try {
+    const info = await (await fetch(`/api/chats/${chatId}/keys`)).json();
+
+    if (info.mine) {
+      chatKeys[chatId] = await E2EE.unwrapChatKey(info.mine, myPrivateKey);
+      // Mitglieder ohne Schlüssel nachziehen (z.B. neu zur Gruppe hinzugefügt).
+      if (info.missing && info.missing.length) {
+        postChatKeys(chatId, chatKeys[chatId], info.missing);
+      }
+      return chatKeys[chatId];
+    }
+
+    if (!info.exists) {
+      // Neuer Chat: wir erzeugen den Schlüssel und verpacken ihn für alle
+      // Mitglieder (uns eingeschlossen — wir stehen selbst in `missing`).
+      const fresh = await E2EE.newChatKey();
+      const mine = await postChatKeys(chatId, fresh, info.missing || []);
+      if (!mine) return null;
+      // Immer die gespeicherte Kopie entpacken: bei einem parallelen Erstellen
+      // hat der andere Client gewonnen und dessen Schlüssel gilt.
+      chatKeys[chatId] = await E2EE.unwrapChatKey(mine, myPrivateKey);
+      return chatKeys[chatId];
+    }
+
+    // Der Chat hat einen Schlüssel, aber noch keine Kopie für uns — ein
+    // Mitglied muss ihn erst für uns verpacken (passiert, sobald es den Chat
+    // öffnet oder das chat_updated-Event bekommt).
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Verpackt den eigenen Chatschlüssel für alle Mitglieder, die noch keinen
+// haben — so bekommt ein neu hinzugefügtes Mitglied Zugriff.
+async function backfillChatKeys(chatId) {
+  const key = chatKeys[chatId];
+  if (!key) return;
+  try {
+    const info = await (await fetch(`/api/chats/${chatId}/keys`)).json();
+    if (info.missing && info.missing.length) await postChatKeys(chatId, key, info.missing);
+  } catch (_) {
+    // Nicht kritisch — der nächste Chat-Aufruf versucht es erneut.
+  }
+}
+
+// Klartext aus einem gespeicherten Inhalt. Unverschlüsselte Altnachrichten
+// (von vor der Umstellung) gehen unverändert durch.
+async function decryptText(chatId, content) {
+  if (!content || !E2EE.isEncrypted(content)) return content;
+  const key = await getChatKey(chatId);
+  if (!key) return UNREADABLE;
+  try {
+    return await E2EE.decryptMessage(key, content);
+  } catch (_) {
+    return UNREADABLE;
+  }
+}
+
+// Entschlüsselt eine ganze Nachrichtenliste an Ort und Stelle.
+async function decryptMessages(messages) {
+  await Promise.all(messages.map(async (m) => {
+    m.content = await decryptText(m.chat_id, m.content);
+  }));
+  return messages;
+}
 
 // ── Zitat-Marker für Antworten/Weiterleiten (unsichtbar im content codiert) ──
 const QUOTE_START = "\u0002Q\u0002";
@@ -235,6 +427,11 @@ async function loadChats(selectId = null) {
   const res = await fetch("/api/chats");
   const chats = await res.json();
 
+  // Die Vorschau kommt als Chiffretext vom Server — vor dem Rendern entschlüsseln.
+  await Promise.all(chats.map(async (c) => {
+    c.last_message = await decryptText(c.id, c.last_message);
+  }));
+
   for (const key in chatsById) delete chatsById[key];
   chats.forEach(c => { chatsById[c.id] = c; });
 
@@ -296,8 +493,12 @@ async function openChat(chatId) {
   // damit wir wissen, wo der „Neue Nachrichten"-Trenner hingehört.
   const unreadCount = unreadByChat[chatId] || 0;
 
+  // Schlüssel vor dem Verlauf holen: legt ihn bei einem frisch erstellten Chat
+  // an und verpackt ihn nebenbei für Mitglieder, die noch keinen haben.
+  await getChatKey(chatId);
+
   const res = await fetch(`/api/chats/${chatId}/messages`);
-  const messages = await res.json();
+  const messages = await decryptMessages(await res.json());
   messagesEl.innerHTML = "";
   messages.forEach(renderMessage);
 
@@ -307,6 +508,7 @@ async function openChat(chatId) {
   const separator = insertNewMessagesSeparator(messages, unreadCount);
   if (separator) separator.scrollIntoView({ block: "center" });
   else scrollToBottom();
+  updateJumpButton();
   msgInput.focus();
 
   // Nur als gelesen markieren, wenn wir tatsächlich ganz unten stehen —
@@ -327,10 +529,49 @@ function isScrolledToBottom(threshold = 40) {
 // Request auslöst).
 messagesEl.addEventListener("scroll", () => {
   if (activeChatId !== null && isScrolledToBottom()) markChatRead(activeChatId);
+  updateJumpButton();
 });
+
+// ── „Zu den neuesten"-Button ──────────────────────────────
+// Chats mit ungelesenen Nachrichten öffnen beim ältesten ungelesenen Eintrag.
+// Wer die neuen Nachrichten überspringen will, kommt hiermit direkt ans Ende.
+// Sichtbar, solange der Verlauf nicht bis unten gescrollt ist; die Beschriftung
+// zeigt zusätzlich die Anzahl der noch ungelesenen Nachrichten.
+function updateJumpButton() {
+  if (!jumpBtn) return;
+  const show = activeChatId !== null && !isScrolledToBottom();
+  jumpBtn.classList.toggle("hidden", !show);
+  if (!show) return;
+
+  const count = unreadByChat[activeChatId] || 0;
+  jumpLabelEl.textContent = count > 0
+    ? `${count} neue ${count === 1 ? "Nachricht" : "Nachrichten"}`
+    : "Zu den neuesten";
+}
+
+if (jumpBtn) {
+  jumpBtn.addEventListener("click", () => {
+    scrollToBottom();
+    if (activeChatId !== null) markChatRead(activeChatId, true);
+    updateJumpButton();
+  });
+}
 
 // ── Eine Nachricht rendern ────────────────────────────────
 function renderMessage(msg) {
+  // Systemhinweise („X hat Y hinzugefügt") kommen im Klartext vom Server und
+  // sind niemandes Nachricht: keine Blase, kein Menü, kein Lesestatus.
+  if (msg.kind === "system") {
+    const note = document.createElement("div");
+    note.className = "system-msg";
+    note.dataset.id = msg.id;
+    note.dataset.chatId = msg.chat_id;
+    note.textContent = msg.content;
+    note.title = formatTime(msg.sent_at);
+    messagesEl.appendChild(note);
+    return;
+  }
+
   const mine = msg.sender_id === ME;
   const chat = chatsById[msg.chat_id];
   const showSender = !mine && chat && chat.is_group;
@@ -369,7 +610,7 @@ function renderMessage(msg) {
   }
 
   const quoteHtml = quote
-    ? `<div class="quote-block"><b>${quote.type === "forward" ? "➜ " : "↩ "}${escapeHtml(quote.name)}</b><span>${escapeHtml(quote.text)}</span></div>`
+    ? `<div class="quote-block"><b>${quote.type === "forward" ? ICONS.forward : ICONS.reply}${escapeHtml(quote.name)}</b><span>${escapeHtml(quote.text)}</span></div>`
     : "";
 
   row.innerHTML = `
@@ -380,7 +621,7 @@ function renderMessage(msg) {
       : `<div class="bubble-line">
            <div class="${bubbleClass}">${bubbleContent}</div>
            <div class="msg-actions">
-             <button class="msg-actions-trigger" title="Optionen">⋯</button>
+             <button class="msg-actions-trigger" title="Optionen">${ICONS.more}</button>
              <div class="msg-dropdown"></div>
            </div>
          </div>`}
@@ -436,10 +677,14 @@ function buildMsgDropdown(dropdown, msg, row, mine) {
   dropdown.innerHTML = "";
   const { text: rawText } = parseQuote(msg.content);
 
-  const addItem = (label, onClick, danger = false) => {
+  // Jeder Eintrag besteht aus SVG-Icon + Beschriftung (keine Emoji/Unicode-Zeichen).
+  const addItem = (iconHtml, label, onClick, danger = false) => {
     const btn = document.createElement("button");
     if (danger) btn.className = "danger";
-    btn.textContent = label;
+    btn.innerHTML = iconHtml;
+    const span = document.createElement("span");
+    span.textContent = label;
+    btn.appendChild(span);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       closeAllMsgDropdowns();
@@ -448,20 +693,20 @@ function buildMsgDropdown(dropdown, msg, row, mine) {
     dropdown.appendChild(btn);
   };
 
-  addItem("↩  Antworten", () => replyToMessage(msg, rawText));
-  addItem("➜  Weiterleiten", () => forwardMessagePrompt(msg, rawText));
+  addItem(ICONS.reply, "Antworten", () => replyToMessage(msg, rawText));
+  addItem(ICONS.forward, "Weiterleiten", () => forwardMessagePrompt(msg, rawText));
   if (rawText) {
-    addItem("⧉  Kopieren", () => copyMessage(rawText));
+    addItem(ICONS.copy, "Kopieren", () => copyMessage(rawText));
   }
 
   if (mine) {
     dropdown.appendChild(document.createElement("hr"));
-    addItem("✎  Bearbeiten", () => {
+    addItem(ICONS.edit, "Bearbeiten", () => {
       if (row.querySelector(".edit-input")) return;
       const currentContent = row.querySelector(".bubble").textContent;
       startEditMessage(msg.id, msg.chat_id, currentContent, row);
     });
-    addItem("✕  Löschen", () => deleteMessage(msg.id, msg.chat_id), true);
+    addItem(ICONS.trash, "Löschen", () => deleteMessage(msg.id, msg.chat_id), true);
   }
 }
 
@@ -474,7 +719,8 @@ function insertNewMessagesSeparator(messages, unreadCount) {
   let firstUnreadId = null;
   let seen = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].sender_id === ME) continue;
+    // Systemhinweise zählen nicht als ungelesene Nachricht.
+    if (messages[i].kind === "system" || messages[i].sender_id === ME) continue;
     if (++seen === unreadCount) { firstUnreadId = messages[i].id; break; }
   }
   if (firstUnreadId === null) return null;
@@ -504,6 +750,15 @@ async function sendMessage() {
   const text0 = msgInput.value.trim();
   if (!text0 && !selectedFile) return;
   if (activeChatId === null) return;
+
+  // Vor dem Ratelimit prüfen, damit ein fehlender Schlüssel keinen Sende-Slot
+  // verbraucht. Ohne Schlüssel könnten die anderen die Nachricht nie lesen.
+  const chatKey = await getChatKey(activeChatId);
+  if (!chatKey) {
+    showRateNotice("Verschlüsselung für diesen Chat nicht verfügbar.");
+    return;
+  }
+
   if (!canSendNow()) {
     showRateNotice();
     return;
@@ -539,7 +794,7 @@ async function sendMessage() {
   }
   socket.emit("send_message", {
     chat_id: activeChatId,
-    content: text,
+    content: await E2EE.encryptMessage(chatKey, text),
     file_url: file_url,
     file_type: file_type,
     file_name: file_name
@@ -582,7 +837,24 @@ msgInput.addEventListener("input", () => {
 });
 
 // ── Eingehende Nachrichten (Echtzeit) ─────────────────────
+// Entschlüsseln ist asynchron, deshalb laufen die Nachrichten durch eine
+// Warteschlange — sonst könnten zwei kurz aufeinanderfolgende Nachrichten in
+// vertauschter Reihenfolge im Verlauf landen.
+let incomingQueue = Promise.resolve();
+
 socket.on("new_message", (msg) => {
+  incomingQueue = incomingQueue
+    .then(async () => {
+      msg.content = await decryptText(msg.chat_id, msg.content);
+      handleNewMessage(msg);
+    })
+    .catch(() => {});
+});
+
+function handleNewMessage(msg) {
+  // Systemhinweise legt der Server bewusst ohne ungelesen-Zeile an — der lokale
+  // Zähler darf also auch nicht hochlaufen, sonst driftet er vom Server ab.
+  const counts = msg.kind !== "system" && msg.sender_id !== ME;
   updateChatPreview(msg.chat_id, msg.content);   // Sidebar-Vorschau aktuell halten
   if (msg.chat_id === activeChatId) {
     // Nur mitscrollen + als gelesen markieren, wenn der Nutzer bereits ganz
@@ -596,23 +868,26 @@ socket.on("new_message", (msg) => {
       // Offener Chat, Nutzer war unten → in DB als gelesen markieren (force,
       // da der lokale Zähler schon 0 ist, der Server aber trotzdem eine
       // ungelesen-Zeile anlegt).
-      if (msg.sender_id !== ME) markChatRead(msg.chat_id, true);
-    } else if (msg.sender_id !== ME) {
+      if (counts) markChatRead(msg.chat_id, true);
+    } else if (counts) {
       unreadByChat[msg.chat_id] = (unreadByChat[msg.chat_id] || 0) + 1;
       updateChatBadge(msg.chat_id);
     }
-  } else if (msg.sender_id !== ME) {
+    updateJumpButton();   // Sichtbarkeit + Zähler nachziehen
+  } else if (counts) {
     // Geschlossener Chat → ungelesen-Zähler erhöhen + Item aufleuchten.
     unreadByChat[msg.chat_id] = (unreadByChat[msg.chat_id] || 0) + 1;
     updateChatBadge(msg.chat_id);
     flashChatItem(msg.chat_id);
   }
-  if (msg.sender_id === ME) loadMe();   // XP/Level aktualisieren
-});
+  if (msg.sender_id === ME && msg.kind !== "system") loadMe();   // XP/Level aktualisieren
+}
 
 // ── Chat-Änderungen (erstellt / umbenannt / Mitglied dazu) ─
 socket.on("chat_updated", async (data) => {
   socket.emit("join_chat", { chat_id: data.chat_id });
+  // Neue Mitglieder brauchen den Chatschlüssel — wer ihn hat, verpackt ihn.
+  backfillChatKeys(data.chat_id);
   await loadChats();
   loadNotifications();   // z.B. Intro-Nachricht nach angenommener Anfrage
   if (data.chat_id === activeChatId) refreshActiveHeader();
@@ -648,6 +923,9 @@ function refreshActiveHeader() {
 
 // ── Abmelden ──────────────────────────────────────────────
 document.getElementById("logout-btn").addEventListener("click", async () => {
+  // Den entpackten Privatschlüssel mit abmelden — sonst bliebe er im
+  // IndexedDB liegen und der nächste Nutzer an diesem Gerät hätte ihn.
+  try { await E2EE.forgetPrivateKey(ME); } catch (_) { /* egal */ }
   const res = await fetch("/logout");
   const data = await res.json();
   window.location.href = data.redirect || "/login";
@@ -1119,10 +1397,15 @@ function startEditMessage(msgId, chatId, currentContent, rowEl) {
 
 async function saveEditMessage(msgId, chatId, newContent, rowEl, originalContent) {
   try {
+    const chatKey = await getChatKey(chatId);
+    if (!chatKey) {
+      rowEl.querySelector(".bubble").innerHTML = escapeHtml(originalContent);
+      return;
+    }
     const res = await fetch(`/api/chats/${chatId}/messages/${msgId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newContent }),
+      body: JSON.stringify({ content: await E2EE.encryptMessage(chatKey, newContent) }),
     });
     const data = await res.json();
     if (!data.ok) {
@@ -1259,11 +1542,12 @@ function forwardMessage(msg, rawText, targetChatId) {
 }
 // ─── Eingehende edit/delete-Events (Echtzeit) ─────────────
 
-socket.on("message_edited", (msg) => {
+socket.on("message_edited", async (msg) => {
   const row = messagesEl.querySelector(`.row[data-id="${msg.id}"]`);
   if (!row) return;
 
-  row.querySelector(".bubble").innerHTML = escapeHtml(msg.content);
+  const content = await decryptText(msg.chat_id, msg.content);
+  row.querySelector(".bubble").innerHTML = escapeHtml(content);
 
   // "(bearbeitet)"-Marker setzen oder aktualisieren.
   let marker = row.querySelector(".edited-marker");
@@ -1360,6 +1644,7 @@ async function markChatRead(chatId, force = false) {
 // ── Start ─────────────────────────────────────────────────
 async function init() {
   loadMe();
+  await cryptoReady;   // muss vor loadChats stehen (entschlüsselt die Vorschauen)
   await loadUsers();   // muss vor loadChats/Pickern stehen (allUsers befüllen)
   await loadFriends(); // Freunde für die Gruppen-Picker
   await loadChats();

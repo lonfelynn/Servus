@@ -24,6 +24,20 @@ form.addEventListener("submit", async function(event) {
   const data = await response.json();
 
   if (data.ok) {
+    // Der Login ist der einzige Moment, in dem der Browser das Passwort hat —
+    // also hier den privaten E2EE-Schlüssel anlegen (erster Login) bzw.
+    // entpacken und lokal ablegen. Danach ist das Passwort wieder weg.
+    try {
+      await E2EE.unlock(data.user_id, password);
+    } catch (err) {
+      errorMsg.textContent = E2EE.available
+        ? "Verschlüsselung konnte nicht eingerichtet werden. Bitte erneut versuchen."
+        : "Verschlüsselung braucht HTTPS (oder localhost). Bitte über eine sichere Verbindung anmelden.";
+      errorMsg.classList.remove("hidden");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Anmelden";
+      return;
+    }
     // Erfolg → zur Zielseite weiterleiten
     window.location.href = data.redirect;
   } else {

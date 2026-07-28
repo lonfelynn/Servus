@@ -3,8 +3,7 @@
 // --------------------------------------------------------------------
 // Getrennt von der übrigen App-Logik. Stellt window.SoederTheme mit
 // activate()/deactivate() bereit; theme.js ruft diese beim Themenwechsel.
-// Erzeugt zwei feste Ebenen: schwebende Zitate (Hintergrund) und ein
-// periodisch auftauchendes Söder-Maskottchen (Vordergrund).
+// Erzeugt eine Ebene: ein periodisch auftauchendes Söder-Maskottchen.
 // MUSS vor theme.js eingebunden werden, damit window.SoederTheme existiert.
 // ════════════════════════════════════════════════════════════════════
 
@@ -32,7 +31,11 @@
 
   // Echten Zitat-Snapshot laden und die Fallback-Liste ersetzen. Same-origin,
   // daher CSP-konform. Fehler werden ignoriert (Fallback bleibt bestehen).
+  // Läuft nur einmal pro Seitenaufruf.
+  let quotesLoaded = false;
   function loadQuotes() {
+    if (quotesLoaded) return;
+    quotesLoaded = true;
     fetch("/api/soeder/quotes", { credentials: "same-origin" })
       .then((r) => (r.ok ? r.json() : null))
       .then((list) => {
@@ -44,56 +47,69 @@
       .catch(() => { /* Fallback-Sprüche behalten. */ });
   }
 
-  // Söder-Maskottchen: echtes Foto aus static/img. Das Bild wird genau einmal
-  // vorgeladen und danach bei jedem Auftauchen nur noch geklont – so löst kein
-  // erneuter Netzwerk-/Dekodier-Aufwand aus.
+  // Söder-Maskottchen: echtes Foto aus static/img. Das Bild wird beim ersten
+  // Aktivieren des Themes genau einmal geladen und danach bei jedem Auftauchen
+  // nur noch geklont – kein erneuter Netzwerk-/Dekodier-Aufwand. Wer das Theme
+  // nie benutzt, lädt das Bild gar nicht erst.
   const MASCOT_SRC = "/static/img/Markus-Soeder.png";
-  const mascotTemplate = new Image();
-  mascotTemplate.className = "soeder-photo";
-  mascotTemplate.alt = "Markus Söder";
-  mascotTemplate.src = MASCOT_SRC;   // startet den Download sofort (Cache füllen)
+  // Die Bayern-Flagge ist der CSS-Hintergrund des Themes. Wir halten eine
+  // Image-Referenz am Leben, damit das dekodierte Bild im Speicher-Cache
+  // bleibt: beim Hin- und Herschalten der Themes (und bei jedem Seitenwechsel,
+  // dank Cache-Header) wird es nicht erneut geladen oder dekodiert.
+  const FLAG_SRC = "/static/img/bavaria-flag.jpeg";
+  let mascotTemplate = null;
+  let flagCache = null;
+  function preloadImages() {
+    if (mascotTemplate) return;
+    mascotTemplate = new Image();
+    mascotTemplate.className = "soeder-photo";
+    mascotTemplate.alt = "Markus Söder";
+    mascotTemplate.decoding = "async";
+    mascotTemplate.src = MASCOT_SRC;
 
-  let bgLayer = null;
+    flagCache = new Image();
+    flagCache.decoding = "async";
+    flagCache.src = FLAG_SRC;
+  }
+
+  // Auftritts-Takt: lange genug stehen bleiben, um das Zitat zu lesen, und
+  // danach ausreichend Pause, damit das Maskottchen nicht nervt.
+  const STAY_MS = 9000;      // Standzeit pro Auftritt
+  const INTERVAL_MS = 20000; // Abstand zwischen zwei Auftritten
+  const FIRST_MS = 2500;     // erster Auftritt nach dem Aktivieren
+
+  // Reihum von unten, rechts, oben und links – so kommt Söder nicht immer aus
+  // derselben Ecke. Die Reihenfolge ist fest, damit sich Auftritte abwechseln
+  // statt zufällig mehrfach hintereinander an derselben Kante zu erscheinen.
+  const SIDES = ["bottom", "right", "top", "left"];
+
   let figureLayer = null;
-  let quoteTimer = null;
   let mascotTimer = null;
-  let cornerToggle = 0;
+  let sideToggle = 0;
   let active = false;
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
-
-  // ── Schwebendes Zitat erzeugen ──────────────────────────────────────
-  function spawnQuote() {
-    if (!bgLayer) return;
-    const el = document.createElement("div");
-    el.className = "soeder-quote";
-    el.textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-
-    const startX = rand(-5, 80);           // vw
-    const startY = rand(10, 90);           // vh
-    const drift  = rand(-14, 14);          // horizontale Abweichung (vw)
-    el.style.setProperty("--x", startX + "vw");
-    el.style.setProperty("--y", startY + "vh");
-    el.style.setProperty("--dx", drift + "vw");
-    el.style.setProperty("--dy", rand(-30, -14) + "vh");   // langsam nach oben
-    el.style.setProperty("--rot", rand(-8, 8) + "deg");
-    el.style.setProperty("--dur", rand(16, 26) + "s");
-
-    el.addEventListener("animationend", () => el.remove());
-    bgLayer.appendChild(el);
-  }
 
   // ── Söder-Maskottchen einblenden ────────────────────────────────────
   function showMascot() {
     if (!figureLayer) return;
 
+    const side = SIDES[sideToggle++ % SIDES.length];
     const wrap = document.createElement("div");
-    wrap.className = "soeder-mascot enter";
+    wrap.className = "soeder-mascot enter from-" + side;
 
-    // Abwechselnd rechte/linke untere Ecke.
-    const onRight = (cornerToggle++ % 2) === 0;
-    wrap.style.bottom = "0";
-    wrap.style[onRight ? "right" : "left"] = rand(2, 8) + "vw";
+    // --fx/--fy sind Start- bzw. Endversatz der Ein-/Ausblend-Animation:
+    // Söder schiebt sich immer aus „seiner" Kante herein und dorthin zurück.
+    if (side === "bottom" || side === "top") {
+      wrap.style[side] = "0";
+      wrap.style[Math.random() < 0.5 ? "right" : "left"] = rand(2, 8) + "vw";
+      wrap.style.setProperty("--fy", (side === "bottom" ? 60 : -60) + "px");
+    } else {
+      wrap.style[side] = "0";
+      // Mittlere Höhe: oberhalb bleibt genug Platz für die Sprechblase.
+      wrap.style.top = rand(35, 55) + "vh";
+      wrap.style.setProperty("--fx", (side === "right" ? 70 : -70) + "px");
+    }
 
     const speech = document.createElement("div");
     speech.className = "soeder-speech";
@@ -103,12 +119,12 @@
     wrap.appendChild(speech);
     figureLayer.appendChild(wrap);
 
-    // Nach kurzer Standzeit wieder ausblenden und entfernen.
+    // Standzeit lang genug, um das Zitat in Ruhe zu lesen.
     setTimeout(() => {
       wrap.classList.remove("enter");
       wrap.classList.add("leave");
       wrap.addEventListener("animationend", () => wrap.remove(), { once: true });
-    }, 2600);
+    }, STAY_MS);
   }
 
   // ── Aktivieren / Deaktivieren ───────────────────────────────────────
@@ -116,32 +132,24 @@
     if (active) return;
     active = true;
 
-    loadQuotes();  // echten Snapshot holen; Fallback bleibt bis dahin aktiv
+    loadQuotes();     // echten Snapshot holen; Fallback bleibt bis dahin aktiv
+    preloadImages();  // Maskottchen + Flaggen-Hintergrund einmalig holen
 
-    bgLayer = document.createElement("div");
-    bgLayer.id = "soeder-bg";
     figureLayer = document.createElement("div");
     figureLayer.id = "soeder-figure";
-    document.body.appendChild(bgLayer);
     document.body.appendChild(figureLayer);
 
-    // Ein paar Zitate direkt zum Start, danach regelmäßig nachlegen.
-    for (let i = 0; i < 4; i++) setTimeout(spawnQuote, i * 900);
-    quoteTimer = setInterval(spawnQuote, 2600);
-
-    setTimeout(showMascot, 1500);
-    mascotTimer = setInterval(showMascot, 7000);
+    setTimeout(showMascot, FIRST_MS);
+    mascotTimer = setInterval(showMascot, INTERVAL_MS);
   }
 
   function deactivate() {
     if (!active) return;
     active = false;
 
-    clearInterval(quoteTimer);
     clearInterval(mascotTimer);
-    quoteTimer = mascotTimer = null;
+    mascotTimer = null;
 
-    if (bgLayer) { bgLayer.remove(); bgLayer = null; }
     if (figureLayer) { figureLayer.remove(); figureLayer = null; }
   }
 

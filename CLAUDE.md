@@ -51,6 +51,12 @@ package. Keep it that way — new routes go in the matching blueprint module, no
   - `routes/profile.py` — `profile_bp`: `/api/me`, app-theme and user-directory API.
   - `routes/chats.py` — `chats_bp`: chats, messages, notifications, uploads, membership.
   - `routes/friends.py` — `friends_bp`: user search and the friend-request lifecycle.
+  - `routes/keys.py` — `keys_bp`: the E2EE key store. Messages are encrypted in the
+    browser (`static/js/crypto.js`), so the server only ever holds ciphertext, public
+    keys, password-wrapped private keys, and per-chat AES keys wrapped per member.
+    Both key writes are deliberately **insert-only** — a user's bundle and a member's
+    chat-key copy can never be overwritten, which is what stops a hijacked session
+    from swapping in its own public key or locking someone out of their history.
   - `routes/sockets.py` — the Socket.IO handlers plus the in-memory send rate limiter.
   - `routes/helpers.py` — `login_required` and the row → JSON serializers (`chat_message_to_dict`,
     `request_to_dict`). `routes/constants.py` — `BASE_DIR` + size limits. `routes/soeder.py` —

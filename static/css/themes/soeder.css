@@ -34,8 +34,8 @@
   background-attachment: fixed;
 }
 
-/* Die App liegt über den Hintergrund-Ebenen; durch die halbtransparenten
-   Panels scheinen Rauten-Muster und schwebende Zitate durch. */
+/* Die App liegt über der Hintergrund-Ebene; durch die halbtransparenten
+   Panels scheint das Rauten-Muster durch. */
 :root[data-app-theme="soeder"] .app {
   position: relative;
   z-index: 1;
@@ -59,40 +59,6 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   Hintergrund-Ebene: schwebende Zitate (Wasserzeichen-Optik)
-   Liegt HINTER der App (z-index 0), pointer-events aus.
-   ════════════════════════════════════════════════════════════════════ */
-#soeder-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.soeder-quote {
-  position: absolute;
-  left: 0;
-  top: 0;
-  font-family: 'Syne', sans-serif;
-  font-weight: 800;
-  font-size: clamp(20px, 3.2vw, 46px);
-  color: rgba(0, 96, 150, 0.16);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
-  max-width: 34vw;                 /* echte Zitate können lang sein → umbrechen */
-  will-change: transform, opacity;
-  animation: soeder-drift var(--dur, 22s) linear forwards;
-}
-
-/* Startpunkt/Bewegung setzt soeder.js über CSS-Variablen (--x, --y, --dx, --dy, --rot). */
-@keyframes soeder-drift {
-  0%   { opacity: 0; transform: translate(var(--x), var(--y)) rotate(var(--rot)); }
-  12%  { opacity: 1; }
-  88%  { opacity: 1; }
-  100% { opacity: 0; transform: translate(calc(var(--x) + var(--dx)), calc(var(--y) + var(--dy))) rotate(var(--rot)); }
-}
-
-/* ════════════════════════════════════════════════════════════════════
    Vordergrund-Ebene: Markus-Söder-Maskottchen erscheint periodisch
    Über der App (z-index 5), aber UNTER den Modals (z-index 50).
    ════════════════════════════════════════════════════════════════════ */
@@ -106,19 +72,35 @@
 
 .soeder-mascot {
   position: absolute;
-  width: clamp(140px, 17vw, 220px);
+  --w: clamp(140px, 17vw, 220px);
+  width: var(--w);
   filter: drop-shadow(0 12px 24px rgba(0, 60, 90, 0.35));
+  /* Alles dreht und skaliert um die Fußlinie – der Punkt, der auf der
+     Bildschirmkante steht, bleibt dadurch immer genau dort liegen. */
   transform-origin: bottom center;
 }
 .soeder-mascot.enter { animation: soeder-pop 0.7s cubic-bezier(0.18, 1.5, 0.4, 1) both; }
 .soeder-mascot.leave { animation: soeder-leave 0.5s ease-in forwards; }
 
+/* Söder kommt abwechselnd von unten, rechts, oben und links herein und steht
+   dabei immer mit den Füßen auf „seiner" Kante – das Foto kippt entsprechend
+   (--tilt). Das PNG ist quadratisch, deshalb reicht --w für die ganze Geometrie:
+   der Drehpunkt (Mitte der Unterkante) liegt bei den Seiten --w/2 außerhalb der
+   Hülle, also wird die Hülle um genau diesen Betrag über den Rand geschoben.
+   Den Start-/Endversatz der Animation (--fx/--fy) setzt soeder.js pro Auftritt. */
+.soeder-mascot.from-bottom { bottom: 0; }
+.soeder-mascot.from-top    { bottom: 100%; --tilt: 180deg; }
+.soeder-mascot.from-left   { left:  calc(var(--w) / -2); --tilt:  90deg; }
+.soeder-mascot.from-right  { right: calc(var(--w) / -2); --tilt: -90deg; }
+
 /* Foto steht frei – kein Rahmen, keine Box. Die Tiefe kommt allein aus dem
-   drop-shadow der .soeder-mascot-Hülle. */
+   drop-shadow der .soeder-mascot-Hülle. Die Grundstellung enthält bereits die
+   Kippung, damit sie auch ohne laufende Wackel-Animation gilt. */
 .soeder-mascot .soeder-photo {
   display: block;
   width: 100%;
   height: auto;
+  transform: rotate(var(--tilt, 0deg));
   animation: soeder-bob 1.6s ease-in-out infinite;
   transform-origin: bottom center;
 }
@@ -159,13 +141,32 @@
   border-bottom-right-radius: 7px;
 }
 
+/* Kommt Söder von oben, hängt die Blase unter ihm – sonst läge sie außerhalb
+   des Bildschirms. Der Zipfel wandert entsprechend an die Oberkante. */
+.soeder-mascot.from-top .soeder-speech { bottom: auto; top: 88%; }
+.soeder-mascot.from-top .soeder-speech::after {
+  bottom: auto;
+  top: -8px;
+  background: #ffffff;
+  box-shadow: inset 1px 1px 0 rgba(0, 152, 216, 0.22);
+  border-bottom-right-radius: 0;
+  border-top-left-radius: 7px;
+}
+
+/* An den Seiten klebt das Foto am Bildschirmrand; eine mittig zentrierte Blase
+   würde hinausragen. Deshalb bündig mit der jeweiligen Fotokante ausrichten. */
+.soeder-mascot.from-left .soeder-speech { left: 0; transform: none; }
+.soeder-mascot.from-left .soeder-speech::after { left: 28%; transform: rotate(45deg); }
+.soeder-mascot.from-right .soeder-speech { left: auto; right: 0; transform: none; }
+.soeder-mascot.from-right .soeder-speech::after { left: auto; right: 28%; transform: rotate(45deg); }
+
 @keyframes soeder-pop {
-  0%   { opacity: 0; transform: translateY(60px) scale(0.6); }
-  100% { opacity: 1; transform: translateY(0)    scale(1); }
+  0%   { opacity: 0; transform: translate(var(--fx, 0), var(--fy, 0)) scale(0.6); }
+  100% { opacity: 1; transform: translate(0, 0) scale(1); }
 }
 @keyframes soeder-leave {
-  0%   { opacity: 1; transform: translateY(0)   scale(1); }
-  100% { opacity: 0; transform: translateY(50px) scale(0.7); }
+  0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--fx, 0), var(--fy, 0)) scale(0.7); }
 }
 @keyframes soeder-bob {
   0%, 100% { transform: rotate(-2deg) translateY(0); }
@@ -174,6 +175,5 @@
 
 /* Nutzer, die reduzierte Bewegung bevorzugen: keine Dauer-Animationen. */
 @media (prefers-reduced-motion: reduce) {
-  .soeder-quote { animation-duration: 0.1s; opacity: 0.5; }
   .soeder-mascot .soeder-photo { animation: none; }
 }

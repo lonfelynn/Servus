@@ -7,7 +7,7 @@
 //   • App-Theme  ('normal' | 'soeder')  – ganzes Erscheinungsbild, data-app-theme
 //   • Modus      ('dark'   | 'light')   – nur innerhalb von 'normal' relevant
 //   • Akzent     (Hex-Farbe)            – nur innerhalb von 'normal' relevant
-// Die Söder-Laufzeit (schwebende Zitate + Maskottchen) lebt in soeder.js und
+// Die Söder-Laufzeit (das Maskottchen) lebt in soeder.js und
 // wird hier nur an-/abgeschaltet.
 
 const APP_THEMES = ['normal', 'soeder'];

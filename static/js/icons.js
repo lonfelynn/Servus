@@ -52,6 +52,12 @@
     plus: icon(`<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`),
     close: icon(`<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`),
     edit: icon(`<path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>`),
+    reply: icon(`<polyline points="9 14 4 9 9 4"/><path d="M4 9h9a7 7 0 017 7v3"/>`),
+    forward: icon(`<polyline points="15 14 20 9 15 4"/><path d="M20 9h-9a7 7 0 00-7 7v3"/>`),
+    copy: icon(
+      `<rect x="9" y="9" width="12" height="12" rx="2"/>` +
+      `<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>`
+    ),
     trash: icon(
       `<line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/>` +
       `<path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>` +

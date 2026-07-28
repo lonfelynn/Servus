@@ -235,6 +235,15 @@ svg.icon {
 }
 .chat-header-name { font-weight: 600; font-size: 16px; flex: 1; min-width: 0; }
 
+/* Hülle nur als Bezugsrahmen für den schwebenden „Zu den neuesten"-Button. */
+.messages-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .messages {
   flex: 1;
   min-height: 0;      /* erlaubt Schrumpfen → Scrollen statt Überlauf */
@@ -297,6 +306,30 @@ svg.icon {
   color: var(--accent);
   white-space: nowrap;
 }
+
+/* „Zu den neuesten"-Button: schwebt unten rechts über den Nachrichten,
+   solange der Nutzer nicht am Ende des Verlaufs steht. */
+.jump-newest {
+  position: absolute;
+  right: 24px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  animation: pop .18s ease both;
+}
+.jump-newest:hover { filter: brightness(1.08); }
+.jump-newest .icon { width: 16px; height: 16px; }
 
 @keyframes pop {
   from { opacity: 0; transform: translateY(6px) scale(.98); }
@@ -736,6 +769,24 @@ svg.icon {
   pointer-events: none;
 }
 
+/* Status-Auswahl: farbiger Punkt statt Emoji. <option> lässt sich nicht mit
+   SVG bestücken, daher zeigt der Punkt links im Feld den aktuellen Wert an
+   (profile.js setzt data-presence). */
+.select-presence { padding-left: 34px; }
+.presence-dot {
+  position: absolute;
+  left: 13px; top: 50%;
+  transform: translateY(-50%);
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  pointer-events: none;
+}
+.presence-dot[data-presence="online"]  { background: #10b981; }
+.presence-dot[data-presence="away"]    { background: #f59e0b; }
+.presence-dot[data-presence="busy"]    { background: #ef4444; }
+.presence-dot[data-presence="offline"] { background: var(--muted); }
+
 /* ─── Einstellungen: Akzent-Swatches ─── */
 .accent-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .accent-swatch {
@@ -1062,6 +1113,21 @@ svg.icon {
   transition: color .12s, background .12s;
 }
 .msg-actions-trigger:hover { color: var(--text); background: var(--input); }
+.msg-actions-trigger svg.icon { width: 16px; height: 16px; display: block; }
+
+/* Systemhinweis: mittige, dezente Zeile ohne Blase (Mitglied hinzugefügt /
+   entfernt, Chat umbenannt). */
+.system-msg {
+  align-self: center;
+  max-width: 80%;
+  margin: 6px 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--input);
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
 
 .msg-dropdown {
   position: absolute;
@@ -1102,7 +1168,10 @@ svg.icon {
   border-radius: 8px;
   cursor: pointer;
 }
+.msg-dropdown button svg.icon { width: 15px; height: 15px; color: var(--muted); }
+.msg-dropdown button.danger svg.icon { color: inherit; }
 .msg-dropdown button:hover { background: var(--input); }
+.msg-dropdown button:hover svg.icon { color: inherit; }
 .msg-dropdown button.danger { color: #ef4444; }
 .msg-dropdown hr { border: none; border-top: 1px solid var(--border); margin: 4px 2px; }
 
@@ -1121,7 +1190,11 @@ svg.icon {
 }
 .row.sent .quote-block { align-self: flex-end; }
 .row.received .quote-block { align-self: flex-start; }
-.quote-block b { color: var(--accent); font-size: 12px; font-weight: 600; }
+.quote-block b {
+  display: flex; align-items: center; gap: 4px;
+  color: var(--accent); font-size: 12px; font-weight: 600;
+}
+.quote-block b svg.icon { width: 13px; height: 13px; }
 .quote-block span {
   color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

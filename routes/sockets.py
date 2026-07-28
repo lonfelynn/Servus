@@ -1,13 +1,13 @@
 # sockets.py
 """Socket.IO realtime handlers (connect / join / leave / send) and the
 in-memory per-user send rate limit."""
+import math
 import time
 from collections import defaultdict, deque
 from threading import Lock
 from flask import session
 from flask_socketio import join_room, leave_room, emit
-from .helpers import chat_message_to_dict
-from .constants import MESSAGE_MAX_LEN
+from .helpers import chat_message_to_dict, content_too_long, plain_len
 from extensions import socketio
 from models import (
     add_message_xp,
@@ -94,8 +94,9 @@ def on_send_message(data):
     if not content and not file_url:
         return
 
-    # Reject over-long messages (the client also enforces this, but never trust it).
-    if len(content) > MESSAGE_MAX_LEN:
+    # Reject over-long messages (the client also enforces this, but never trust
+    # it). Encrypted content is measured against the larger ciphertext ceiling.
+    if content_too_long(content):
         return
 
     # Only members may post to a chat.
@@ -108,7 +109,10 @@ def on_send_message(data):
         return
 
     message = save_chat_message(chat_id, sender_id, content, file_url, file_type, file_name)
-    lenght = len(content)
+    # Longer messages are worth more XP, with a cap so nobody farms it by
+    # pasting walls of text. plain_len() undoes the base64/AES-GCM size
+    # inflation so encrypted messages score the same as plaintext ones did.
+    length = plain_len(content)
     if length > 20:
         add_xp(sender_id, min(5 + int(math.sqrt(length) / 2), 15))
     payload = chat_message_to_dict(message, sender_name=session.get("username", ""))

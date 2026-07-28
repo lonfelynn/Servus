@@ -4,7 +4,7 @@ import os
 import uuid
 from werkzeug.utils import secure_filename
 from flask import Blueprint, request, session, jsonify, url_for
-from .helpers import login_required, chat_message_to_dict
+from .helpers import login_required, chat_message_to_dict, content_too_long
 from .constants import BASE_DIR, MESSAGE_MAX_LEN
 from extensions import socketio
 from models import (
@@ -18,10 +18,12 @@ from models import (
     get_friend_ids,
     get_unread_chat_counts,
     get_user_chats,
+    get_user_by_id,
     is_chat_member,
     mark_chat_notifications_read,
     remove_chat_member,
     rename_chat,
+    save_chat_message,
     update_chat_message,
 )
 
@@ -29,6 +31,26 @@ chats_bp = Blueprint("chats", __name__)
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def system_message(chat_id: int, actor_id: int, text: str):
+    """Writes a system notice into the chat and pushes it to everyone in the room.
+
+    These rows are plaintext (kind='system'): the server holds no chat key, so it
+    could not encrypt them. They only ever contain names the server already knows.
+    A failure here must never break the membership/rename operation itself.
+    """
+    try:
+        message = save_chat_message(chat_id, actor_id, text, kind="system")
+        socketio.emit("new_message", chat_message_to_dict(message, sender_name=""),
+                      room=f"chat_{chat_id}")
+    except Exception:
+        pass
+
+
+def _username(user_id: int) -> str:
+    user = get_user_by_id(user_id)
+    return user["username"] if user else "Jemand"
 
 
 @chats_bp.route("/api/chats")
@@ -98,7 +120,7 @@ def api_edit_message(chat_id, message_id):
     content = (data.get("content") or "").strip()
     if not content:
         return jsonify({"ok": False, "error": "Nachricht darf nicht leer sein."}), 400
-    if len(content) > MESSAGE_MAX_LEN:
+    if content_too_long(content):
         return jsonify({"ok": False, "error": f"Nachricht darf höchstens {MESSAGE_MAX_LEN} Zeichen haben."}), 400
 
     updated = update_chat_message(message_id, me, content)
@@ -200,6 +222,7 @@ def api_add_member(chat_id):
         return jsonify({"ok": False, "error": "Du kannst nur Freunde zur Gruppe hinzufügen."}), 403
 
     add_chat_member(chat_id, new_id)
+    system_message(chat_id, me, f"{_username(me)} hat {_username(new_id)} hinzugefügt.")
     # Notify all members (incl. the new one) so they join/refresh the chat.
     for m in get_chat_members(chat_id):
         socketio.emit("chat_updated", {"chat_id": chat_id}, room=f"user_{m['id']}")
@@ -216,6 +239,10 @@ def api_remove_member(chat_id, user_id):
 
     members = get_chat_members(chat_id)
     remove_chat_member(chat_id, user_id)
+    if user_id == me:
+        system_message(chat_id, me, f"{_username(me)} hat den Chat verlassen.")
+    else:
+        system_message(chat_id, me, f"{_username(me)} hat {_username(user_id)} entfernt.")
     # Tell the removed user to drop the chat, and refresh everyone else.
     socketio.emit("chat_removed", {"chat_id": chat_id}, room=f"user_{user_id}")
     for m in members:
@@ -234,7 +261,15 @@ def api_rename_chat(chat_id):
 
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
+    before = get_chat(chat_id, me)
     rename_chat(chat_id, name)
+    # Das Verwalten-Modal schickt den Namen bei jedem Speichern mit — nur ein
+    # echter Wechsel ist einen Hinweis wert.
+    if ((before or {}).get("name") or "") != name:
+        if name:
+            system_message(chat_id, me, f"{_username(me)} hat den Chat in „{name}“ umbenannt.")
+        else:
+            system_message(chat_id, me, f"{_username(me)} hat den Chatnamen entfernt.")
     for m in get_chat_members(chat_id):
         socketio.emit("chat_updated", {"chat_id": chat_id}, room=f"user_{m['id']}")
     return jsonify({"ok": True, "chat": get_chat(chat_id, me)})
