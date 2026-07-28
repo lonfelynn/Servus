@@ -15,7 +15,6 @@ services:
     # Point DB_HOST at the external Postgres IP. If that DB runs on the
     # Docker host itself, use host.docker.internal instead of an IP.
     env_file: .env
-    network_mode: host
     # Bind-mount the source for quick edits (restart the container to apply).
     # Remove this block for a fully self-contained production image.
     volumes:
