@@ -22,3 +22,10 @@ services:
       - .:/app
     ports:
       - "5000:5000"
+
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true
