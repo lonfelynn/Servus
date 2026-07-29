@@ -84,8 +84,8 @@ def api_friend_accept(request_id):
     res = accept_friend_request(request_id, me)
     if res is None:
         return jsonify({"ok": False, "error": "Anfrage nicht gefunden."}), 404
-    add_xp(me, 25)
-    add_xp(res["requester_id"], 25)
+    add_xp(me, 100)
+    add_xp(res["requester_id"], 100)
     requester_id = res["requester_id"]
     chat_id = find_or_create_chat([requester_id, me], created_by=requester_id)
 
