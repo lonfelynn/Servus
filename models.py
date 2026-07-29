@@ -410,6 +410,11 @@ def find_or_create_chat(member_ids, created_by=None, name=None):
                 "INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s)",
                 (chat_id, uid)
             )
+         if created_by is not None:
+            if len(ids) == 2:
+                add_xp(created_by, 50)
+            else:
+                add_xp(created_by, 75)
         return chat_id
 
 
