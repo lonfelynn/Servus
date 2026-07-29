@@ -40,6 +40,13 @@ Echtzeit-Chat mit Freunden, Gruppen, Datei-Anhängen, XP-System und einer ordent
 - **App-Themes** inklusive „Söder"-Theme mit Freischalt-Mechanik und Live-Zitaten.
 - **Akzentfarbe** sowie Hell-/Dunkel-Modus.
 
+### 🎰 Casino – „Servus Slots"
+- **Einarmiger Bandit** in der Seitenleiste: XP einsetzen, drei Walzen drehen, gewinnen oder verlieren.
+- **Einsatz** frei wählbar zwischen 10 und 500 XP (Schnellwahl-Chips inklusive).
+- **Gewinntabelle** von zwei Glocken (Einsatz zurück) bis zu drei Siebenen (150× Einsatz).
+- **Bilanz und Historie** der letzten Spins direkt im Modal.
+- Der Ausgang wird **serverseitig** gewürfelt und in einer Transaktion verbucht — im Browser lässt sich nichts drehen.
+
 ### 🔒 Sicherheit
 - Passwörter mit **bcrypt** gehasht.
 - **Rate-Limiting** für Login / Registrierung und für das Senden von Nachrichten.
@@ -147,6 +154,7 @@ Echtzeit. Für einen Gruppenchat lädst du weitere Freunde dazu ein.
 | `extensions.py`       | Geteilte Instanzen (Rate-Limiter, Socket.IO), spät gebunden   |
 | `database.py`         | PostgreSQL-Connection-Pool und Migrations-Runner              |
 | `models.py`           | Sämtlicher SQL-Zugriff (Nutzer, Chats, Nachrichten, Freunde, XP) |
+| `slots.py`            | Spiellogik der XP-Slotmaschine (Walzen, Gewinntabelle, Zufall)  |
 | `routes/`             | Die Web-Schicht (siehe unten)                                 |
 | `templates/`          | Jinja-Templates (`login`, `register`, `chat`, `profile`)      |
 | `static/`             | CSS, JS, Bilder und hochgeladene Anhänge (`uploads/`)         |
@@ -164,6 +172,7 @@ Echtzeit. Für einen Gruppenchat lädst du weitere Freunde dazu ein.
 | `routes/profile.py`    | Profil, App-Theme und Nutzerverzeichnis (JSON-API)          |
 | `routes/chats.py`      | Chats, Nachrichten, Uploads, Mitglieder, Benachrichtigungen |
 | `routes/friends.py`    | Nutzersuche und Freundschaftsanfragen                       |
+| `routes/games.py`      | XP-Slotmaschine: Konfiguration, Spin, Historie              |
 | `routes/sockets.py`    | Echtzeit-Handler (connect / join / leave / send) + Rate-Limit |
 | `routes/helpers.py`    | `login_required`-Decorator und JSON-Serialisierer           |
 | `routes/constants.py`  | Projektpfade und Größenlimits                                |

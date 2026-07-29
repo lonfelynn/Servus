@@ -1248,3 +1248,292 @@ svg.icon {
   z-index: 80;
 }
 .msg-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ─── Casino: XP-Slots (nutzt die bestehenden .modal-Klassen) ─── */
+/* Kantenlänge einer Walze = Höhe einer Symbolzelle. Beides hängt an dieser
+   Variable, damit die Lauf-Animation (translateY) immer exakt eine Zelle
+   weiterschiebt — auch wenn die Größe auf dem Handy kleiner wird. */
+.slots-modal { --slot-cell: 84px; max-width: 470px; gap: 12px; }
+
+/* Kopfzeile: Titel links, Schließen-Kreuz rechts. */
+.slots-head { display: flex; align-items: flex-start; gap: 12px; }
+.slots-head-text { flex: 1; min-width: 0; }
+.slots-head .modal-title { margin-bottom: 2px; }
+.slots-sub { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+
+/* Kontostand */
+.slots-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.slots-balance-main { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.slots-xp { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; }
+.slots-xp-unit { font-size: 13px; color: var(--muted); }
+.slots-delta { font-size: 13px; font-weight: 700; margin-left: 4px; white-space: nowrap; }
+.slots-delta.positive { color: #22c55e; }
+.slots-delta.negative { color: #ef4444; }
+.slots-delta.pop { animation: slots-delta-pop .7s ease; }
+@keyframes slots-delta-pop {
+  0%   { opacity: 0; transform: translateY(6px); }
+  25%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.slots-balance-side { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+.slots-level { font-size: 12.5px; color: var(--muted); }
+.slots-progress { width: 110px; height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; }
+/* Der Balken skaliert statt seine Breite zu animieren — width triggert Layout,
+   transform läuft auf dem Compositor. slots.js setzt --fill (0…1). */
+.slots-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left center;
+  transition: transform .5s ease;
+}
+
+/* Der Automat */
+.slots-machine {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%),
+    var(--input);
+  transition: box-shadow .2s;
+}
+
+/* Gewinnlinie quer über die drei Walzen — macht sichtbar, worauf es ankommt. */
+.slots-payline {
+  position: absolute;
+  left: 10px; right: 10px; top: 50%;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 55%, transparent) 15%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 85%,
+    transparent);
+  pointer-events: none;
+}
+.slots-machine.win {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 28px color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: slots-win-pulse .8s ease;
+}
+@keyframes slots-win-pulse {
+  0%, 100% { transform: scale(1); }
+  35%      { transform: scale(1.025); }
+}
+
+.slots-reel {
+  position: relative;
+  width: var(--slot-cell);
+  height: var(--slot-cell);
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 6px 12px rgba(0, 0, 0, .28);
+  transition: border-color .2s, box-shadow .2s;
+}
+/* Die Walzen, die zur Gewinnkombination gehören, bekommen einen Rahmen. */
+.slots-reel.won {
+  border-color: var(--accent);
+  box-shadow: inset 0 6px 12px rgba(0, 0, 0, .28),
+              0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.slots-strip { display: flex; flex-direction: column; }
+.slots-cell {
+  height: var(--slot-cell);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+/* Walzensymbol: SVG in der Farbe, die der Server zum Symbol mitliefert. */
+.slots-face { display: flex; align-items: center; justify-content: center; }
+.slots-face svg {
+  width: calc(var(--slot-cell) * .58);
+  height: calc(var(--slot-cell) * .58);
+  display: block;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35));
+}
+.slots-face.small svg { width: 22px; height: 22px; filter: none; }
+.slots-face.tiny svg  { width: 16px; height: 16px; filter: none; }
+/* Laufende Walze: schiebt die Symbolsäule endlos um genau eine Zelle weiter. */
+.slots-strip.spinning {
+  animation: slots-reel-spin .13s linear infinite;
+  filter: blur(.7px);
+}
+@keyframes slots-reel-spin {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(-1 * var(--slot-cell))); }
+}
+/* Aufsetzen der Walze auf dem Ergebnis. */
+.slots-strip.landed { animation: slots-reel-land .3s cubic-bezier(.2, 1.3, .5, 1); }
+@keyframes slots-reel-land {
+  0%   { transform: translateY(calc(-.35 * var(--slot-cell))); }
+  70%  { transform: translateY(4px); }
+  100% { transform: translateY(0); }
+}
+
+.slots-result {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 20px;
+  color: var(--muted);
+}
+.slots-result.win  { color: #22c55e; }
+.slots-result.lose { color: #ef4444; }
+.slots-result.even { color: var(--text); }
+
+/* Einsatz: Beschriftung + Zahlenfeld in einer Zeile, Chips darunter */
+.slots-bet-block { display: flex; flex-direction: column; gap: 10px; }
+.slots-bet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.slots-bet-head .modal-label { margin: 0; }
+.slots-bets { display: flex; flex-wrap: wrap; gap: 8px; }
+.slots-chip {
+  flex: 1 1 60px;
+  padding: 9px 6px;
+  background: var(--input);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .15s;
+}
+.slots-chip:hover:not(:disabled) { border-color: var(--accent); }
+.slots-chip.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--input)); }
+.slots-chip:disabled { opacity: .35; cursor: not-allowed; }
+
+.slots-bet-row { display: flex; gap: 8px; flex-shrink: 0; }
+.slots-bet-input { width: 96px; text-align: right; }
+.slots-max-btn { flex-shrink: 0; padding: 8px 14px; }
+
+.slots-spin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 14px 18px;
+}
+.slots-spin-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* Gewinntabelle + Bilanz + Historie (aufklappbar) */
+.slots-details { border-top: 1px solid var(--border); padding-top: 10px; }
+.slots-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  list-style: none;
+}
+.slots-details > summary::-webkit-details-marker { display: none; }
+/* Pfeil als SVG (kein Unicode-Dreieck) – klappt beim Öffnen nach unten. */
+.slots-summary-caret {
+  width: 14px; height: 14px;
+  transition: transform .2s ease;
+}
+.slots-details[open] > summary .slots-summary-caret { transform: rotate(90deg); }
+
+.slots-paytable { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.slots-paytable-head,
+.slots-paytable-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+}
+.slots-paytable-head {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: .05em;
+}
+.slots-paytable-row { border-radius: 8px; }
+.slots-paytable-row:nth-child(odd) { background: var(--input); }
+.slots-paytable-symbol { display: flex; align-items: center; gap: 8px; }
+.slots-paytable-label { font-size: 11.5px; color: var(--muted); }
+
+.slots-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.slots-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--input);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.slots-stat span { color: var(--muted); font-size: 11px; }
+.slots-stat strong { font-size: 14px; }
+.slots-stat strong.win  { color: #22c55e; }
+.slots-stat strong.lose { color: #ef4444; }
+
+.slots-history { display: flex; flex-direction: column; gap: 2px; }
+.slots-history-empty { font-size: 12.5px; color: var(--muted); padding: 6px 8px; }
+.slots-history-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.slots-history-row:nth-child(odd) { background: var(--input); }
+.slots-history-symbols { display: flex; align-items: center; gap: 3px; }
+.slots-history-bet { color: var(--muted); }
+.slots-history-net { font-weight: 700; }
+.slots-history-net.win  { color: #22c55e; }
+.slots-history-net.lose { color: #ef4444; }
+.slots-history-time { color: var(--muted); font-size: 11px; }
+
+.slots-odds {
+  font-size: 11.5px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-top: 12px;
+}
+.slots-hint { font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 4px; }
+
+@media (max-width: 600px) {
+  .slots-modal { --slot-cell: 66px; }
+  .slots-stats { grid-template-columns: 1fr; }
+  .slots-bet-head { flex-direction: column; align-items: stretch; gap: 8px; }
+  .slots-bet-input { width: auto; flex: 1; }
+}

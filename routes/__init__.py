@@ -11,10 +11,12 @@ from .profile import profile_bp
 from .chats import chats_bp
 from .friends import friends_bp
 from .keys import keys_bp
+from .games import games_bp
 from . import sockets  # noqa: F401 — registers the @socketio.on(...) handlers
 
 # Every blueprint app.py needs to register, in one place.
-all_blueprints = (auth_bp, main_bp, profile_bp, chats_bp, friends_bp, keys_bp)
+all_blueprints = (auth_bp, main_bp, profile_bp, chats_bp, friends_bp, keys_bp,
+                  games_bp)
 
 __all__ = ["all_blueprints", "auth_bp", "main_bp", "profile_bp", "chats_bp",
-           "friends_bp", "keys_bp"]
+           "friends_bp", "keys_bp", "games_bp"]

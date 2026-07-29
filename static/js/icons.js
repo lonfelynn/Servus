@@ -83,6 +83,13 @@
       `<line x1="4.9" y1="19.1" x2="6.6" y2="17.4"/><line x1="17.4" y1="6.6" x2="19.1" y2="4.9"/>`
     ),
     moon: icon(`<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>`),
+    // Spielautomat: Gehäuse mit Walzenfenster und Hebel an der rechten Seite.
+    slots: icon(
+      `<rect x="3" y="5" width="13" height="15" rx="2"/>` +
+      `<rect x="5.5" y="8" width="8" height="5" rx="1"/>` +
+      `<line x1="8.2" y1="8" x2="8.2" y2="13"/><line x1="10.8" y1="8" x2="10.8" y2="13"/>` +
+      `<path d="M16 8h2.6A1.4 1.4 0 0120 9.4V13"/><circle cx="20" cy="6.3" r="1.3"/>`
+    ),
     // Palette – Inhalt um 0.5px zentriert, damit das Glyph exakt in der Box sitzt
     // (die Miniatur-Vorlage saß leicht links/tief).
     palette: icon(

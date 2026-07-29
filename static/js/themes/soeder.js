@@ -75,7 +75,7 @@
   // Auftritts-Takt: lange genug stehen bleiben, um das Zitat zu lesen, und
   // danach ausreichend Pause, damit das Maskottchen nicht nervt.
   const STAY_MS = 9000;      // Standzeit pro Auftritt
-  const INTERVAL_MS = 20000; // Abstand zwischen zwei Auftritten
+  const INTERVAL_MS = 14000; // Abstand zwischen zwei Auftritten
   const FIRST_MS = 2500;     // erster Auftritt nach dem Aktivieren
 
   // Reihum von unten, rechts, oben und links – so kommt Söder nicht immer aus
@@ -98,16 +98,17 @@
     const wrap = document.createElement("div");
     wrap.className = "soeder-mascot enter from-" + side;
 
-    // --fx/--fy sind Start- bzw. Endversatz der Ein-/Ausblend-Animation:
+    // Die Kante selbst (und die passende Kippung) setzt das CSS über die
+    // from-*-Klasse. Hier kommt nur dazu, wo entlang der Kante er auftaucht,
+    // plus der Start-/Endversatz der Ein-/Ausblend-Animation (--fx/--fy):
     // Söder schiebt sich immer aus „seiner" Kante herein und dorthin zurück.
     if (side === "bottom" || side === "top") {
-      wrap.style[side] = "0";
-      wrap.style[Math.random() < 0.5 ? "right" : "left"] = rand(2, 8) + "vw";
+      // Mindestens 6vw von der Ecke weg, sonst ragt die Sprechblase hinaus.
+      wrap.style[Math.random() < 0.5 ? "right" : "left"] = rand(6, 14) + "vw";
       wrap.style.setProperty("--fy", (side === "bottom" ? 60 : -60) + "px");
     } else {
-      wrap.style[side] = "0";
-      // Mittlere Höhe: oberhalb bleibt genug Platz für die Sprechblase.
-      wrap.style.top = rand(35, 55) + "vh";
+      // Fußlinie auf mittlerer Höhe: darüber bleibt Platz für die Sprechblase.
+      wrap.style.bottom = rand(30, 50) + "vh";
       wrap.style.setProperty("--fx", (side === "right" ? 70 : -70) + "px");
     }
 

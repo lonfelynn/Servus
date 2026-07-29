@@ -1,0 +1,85 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: Servus Slots
+      - generic [ref=e7]: Setz XP, dreh die Walzen — drei Siebenen zahlen 120×.
+    - button "Schließen" [ref=e8] [cursor=pointer]
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: "4.820"
+      - generic [ref=e15]: XP
+    - generic [ref=e16]: Level 12
+  - generic [ref=e39]: Viel Glück!
+  - generic [ref=e40]:
+    - generic [ref=e41]:
+      - generic [ref=e42]: Einsatz
+      - generic [ref=e43]:
+        - spinbutton [ref=e44]: "50"
+        - button "Max" [ref=e45] [cursor=pointer]
+    - generic [ref=e46]:
+      - button "10" [ref=e47] [cursor=pointer]
+      - button "25" [ref=e48] [cursor=pointer]
+      - button "50" [ref=e49] [cursor=pointer]
+      - button "100" [ref=e50] [cursor=pointer]
+      - button "250" [ref=e51] [cursor=pointer]
+  - button "Drehen · 50 XP" [ref=e52] [cursor=pointer]
+  - group [ref=e57]:
+    - generic "Gewinntabelle & Bilanz" [ref=e58] [cursor=pointer]
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - generic [ref=e63]: Symbol
+        - generic [ref=e64]: 3 gleiche
+        - generic [ref=e65]: 2 gleiche
+      - generic [ref=e66]:
+        - generic [ref=e67]: Sieben
+        - generic [ref=e72]: 120× Einsatz
+        - generic [ref=e73]: 4× Einsatz
+      - generic [ref=e74]:
+        - generic [ref=e75]: Diamant
+        - generic [ref=e81]: 50× Einsatz
+        - generic [ref=e82]: 2× Einsatz
+      - generic [ref=e83]:
+        - generic [ref=e84]: Stern
+        - generic [ref=e89]: 28× Einsatz
+        - generic [ref=e90]: 1,5× Einsatz
+      - generic [ref=e91]:
+        - generic [ref=e92]: Glocke
+        - generic [ref=e98]: 18× Einsatz
+        - generic [ref=e99]: 1× Einsatz
+      - generic [ref=e100]:
+        - generic [ref=e101]: Zitrone
+        - generic [ref=e107]: 10× Einsatz
+        - generic [ref=e108]: 0,5× Einsatz
+      - generic [ref=e109]:
+        - generic [ref=e110]: Kirsche
+        - generic [ref=e118]: 6× Einsatz
+        - generic [ref=e119]: 0,4× Einsatz
+    - generic [ref=e120]:
+      - generic [ref=e121]:
+        - generic [ref=e122]: Spins
+        - strong [ref=e123]: "37"
+      - generic [ref=e124]:
+        - generic [ref=e125]: Eingesetzt
+        - strong [ref=e126]: 2.150 XP
+      - generic [ref=e127]:
+        - generic [ref=e128]: Ausgezahlt
+        - strong [ref=e129]: 1.980 XP
+      - generic [ref=e130]:
+        - generic [ref=e131]: Bilanz
+        - strong [ref=e132]: "-170 XP"
+    - generic [ref=e133]: Letzte Spins
+    - generic [ref=e134]:
+      - generic [ref=e135]:
+        - generic [ref=e146]: 50 XP
+        - generic [ref=e147]: "+850"
+        - generic [ref=e148]: 11:58
+      - generic [ref=e149]:
+        - generic [ref=e167]: 50 XP
+        - generic [ref=e168]: "-30"
+        - generic [ref=e169]: 11:57
+      - generic [ref=e170]:
+        - generic [ref=e183]: 100 XP
+        - generic [ref=e184]: "-100"
+        - generic [ref=e185]: 11:56
+    - paragraph [ref=e186]: 96 % Auszahlungsquote · rund 49 % der Spins gewinnen
+    - paragraph [ref=e187]: Einsatz zwischen 10 und 250 XP. Auf Dauer gewinnt der Automat — verlorene XP kosten dich auch Level.

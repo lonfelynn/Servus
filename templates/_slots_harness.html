@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><title>Slots</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/css/chat.css">
+<style>body{background:var(--bg);padding:0}.modal-overlay{position:static;display:flex;padding:24px;background:var(--bg)}</style>
+</head><body>
+<div class="modal-overlay hidden" id="slots-modal">
+  <div class="modal slots-modal">
+
+    <!-- Kopf: Titel links, Schließen rechts (das Modal ist zu hoch für einen Fuß) -->
+    <div class="slots-head">
+      <div class="slots-head-text">
+        <div class="modal-title">Servus Slots</div>
+        <div class="slots-sub">Setz XP, dreh die Walzen — drei Siebenen zahlen 120×.</div>
+      </div>
+      <button type="button" class="icon-btn" id="slots-close-btn" title="Schließen">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Kontostand: XP, Level und Fortschritt im aktuellen Level -->
+    <div class="slots-balance">
+      <div class="slots-balance-main">
+        <span class="slots-xp" id="slots-xp">0</span><span class="slots-xp-unit">XP</span>
+        <span class="slots-delta hidden" id="slots-delta"></span>
+      </div>
+      <div class="slots-balance-side">
+        <div class="slots-level" id="slots-level">Level 1</div>
+        <div class="slots-progress"><div class="slots-progress-fill" id="slots-progress-fill"></div></div>
+      </div>
+    </div>
+
+    <!-- Die drei Walzen. Die Symbole erzeugt slots.js als SVG. -->
+    <div class="slots-machine" id="slots-machine">
+      <div class="slots-reel" id="slots-reel-0"><div class="slots-strip" id="slots-strip-0"></div></div>
+      <div class="slots-reel" id="slots-reel-1"><div class="slots-strip" id="slots-strip-1"></div></div>
+      <div class="slots-reel" id="slots-reel-2"><div class="slots-strip" id="slots-strip-2"></div></div>
+      <div class="slots-payline" aria-hidden="true"></div>
+    </div>
+
+    <div class="slots-result" id="slots-result">Viel Glück!</div>
+
+    <!-- Einsatz: Chips zum Antippen, Zahlenfeld für alles dazwischen -->
+    <div class="slots-bet-block">
+      <div class="slots-bet-head">
+        <span class="modal-label">Einsatz</span>
+        <div class="slots-bet-row">
+          <input class="modal-input slots-bet-input" id="slots-bet-input" type="number"
+                 inputmode="numeric" min="10" max="250" step="5" value="50">
+          <button type="button" class="btn btn-ghost slots-max-btn" id="slots-max-btn">Max</button>
+        </div>
+      </div>
+      <div class="slots-bets" id="slots-bets"></div>
+    </div>
+
+    <button type="button" class="btn btn-primary slots-spin-btn" id="slots-spin-btn">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 11-2.6-6.1"/><polyline points="20.6 4.2 20.6 9.2 15.6 9.2"/></svg>
+      <span id="slots-spin-label">Drehen</span>
+    </button>
+
+    <!-- Gewinntabelle, Bilanz und die letzten Spins -->
+    <details class="slots-details">
+      <summary>
+        <svg class="icon slots-summary-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+        Gewinntabelle &amp; Bilanz
+      </summary>
+
+      <div class="slots-paytable" id="slots-paytable"></div>
+      <div class="slots-stats" id="slots-stats"></div>
+
+      <div class="modal-label" style="margin-top: 14px;">Letzte Spins</div>
+      <div class="slots-history" id="slots-history"></div>
+
+      <p class="slots-odds" id="slots-odds"></p>
+      <p class="slots-hint" id="slots-hint"></p>
+    </details>
+  </div>
+</div>
+<script>
+const MOCK = {"symbols": [{"id": "cherry", "label": "Kirsche", "color": "#ef4444", "weight": 26}, {"id": "lemon", "label": "Zitrone", "color": "#eab308", "weight": 22}, {"id": "bell", "label": "Glocke", "color": "#f59e0b", "weight": 18}, {"id": "star", "label": "Stern", "color": "#38bdf8", "weight": 14}, {"id": "diamond", "label": "Diamant", "color": "#22d3ee", "weight": 12}, {"id": "seven", "label": "Sieben", "color": "#a855f7", "weight": 8}], "paytable": [{"symbol": "seven", "label": "Sieben", "color": "#a855f7", "triple": "120", "double": "4"}, {"symbol": "diamond", "label": "Diamant", "color": "#22d3ee", "triple": "50", "double": "2"}, {"symbol": "star", "label": "Stern", "color": "#38bdf8", "triple": "28", "double": "1,5"}, {"symbol": "bell", "label": "Glocke", "color": "#f59e0b", "triple": "18", "double": "1"}, {"symbol": "lemon", "label": "Zitrone", "color": "#eab308", "triple": "10", "double": "0,5"}, {"symbol": "cherry", "label": "Kirsche", "color": "#ef4444", "triple": "6", "double": "0,4"}], "min_bet": 10, "max_bet": 250, "bet_steps": [10, 25, 50, 100, 250], "reels": 3, "rtp": 96.0, "hit_rate": 49, "xp": 4820, "level": 12, "level_xp": 320, "level_span": 900, "stats": {"spins": 37, "wagered": 2150, "won": 1980, "net": -170}, "history": [{"bet": 50, "payout": 900, "net": 850, "symbols": ["star", "star", "star"], "xp_after": 4820, "created_at": "2026-07-29T11:58:00"}, {"bet": 50, "payout": 20, "net": -30, "symbols": ["cherry", "cherry", "lemon"], "xp_after": 3970, "created_at": "2026-07-29T11:57:00"}, {"bet": 100, "payout": 0, "net": -100, "symbols": ["bell", "diamond", "seven"], "xp_after": 4000, "created_at": "2026-07-29T11:56:00"}]};
+window.fetch = async (url) => ({ ok: true, status: 200, json: async () => MOCK });
+function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+</script>
+<script src="/static/js/slots.js"></script>
+<script>
+  document.getElementById('slots-modal').classList.remove('hidden');
+  loadSlots().then(() => {
+    document.querySelector('.slots-details').open = true;
+    document.getElementById('slots-reel-0').classList.add('won');
+    document.getElementById('slots-reel-1').classList.add('won');
+  });
+</script>
+</body></html>

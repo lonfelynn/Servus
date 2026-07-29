@@ -1,6 +1,7 @@
 # models.py
 import bcrypt
 import psycopg2
+import slots
 from database import get_connection
 
 # ── Constants ──────────────────────────────────────────────
@@ -410,7 +411,7 @@ def find_or_create_chat(member_ids, created_by=None, name=None):
                 "INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s)",
                 (chat_id, uid)
             )
-         if created_by is not None:
+        if created_by is not None:
             if len(ids) == 2:
                 add_xp(created_by, 50)
             else:
@@ -1028,3 +1029,104 @@ def add_chat_keys(chat_id: int, wrapped_by_user: dict) -> int:
             inserted += cursor.rowcount
         return inserted
 
+
+
+# ── XP-Slotmaschine ────────────────────────────────────────
+# Die Spielmechanik (Walzen, Gewinntabelle, Zufall) liegt in slots.py; hier
+# steht nur die Buchhaltung. Wichtig: Einsatz prüfen, Walzen drehen und XP
+# schreiben passieren in EINER Transaktion mit `FOR UPDATE` auf der Nutzerzeile
+# — sonst könnten zwei parallele Spins denselben XP-Stand als Deckung nutzen.
+def play_slots(user_id: int, bet: int):
+    """Spielt einen Spin um `bet` XP und bucht das Ergebnis ab.
+
+    Gibt `{ok: False, error: …}` zurück, wenn der Einsatz ungültig ist oder die
+    XP nicht reichen — sonst das Ergebnis aus slots.evaluate() plus dem neuen
+    XP-/Level-Stand.
+    """
+    if not isinstance(bet, int) or isinstance(bet, bool):
+        return {"ok": False, "error": "Ungültiger Einsatz."}
+    if bet < slots.MIN_BET or bet > slots.MAX_BET:
+        return {"ok": False,
+                "error": f"Einsatz muss zwischen {slots.MIN_BET} und {slots.MAX_BET} XP liegen."}
+
+    with get_connection() as connection:
+        cursor = connection.cursor()
+
+        # FOR UPDATE sperrt die Zeile bis zum Commit des Kontextmanagers.
+        cursor.execute("SELECT xp FROM users WHERE id = %s FOR UPDATE", (user_id,))
+        user = cursor.fetchone()
+        if user is None:
+            return {"ok": False, "error": "Nutzer nicht gefunden."}
+
+        current_xp = user["xp"]
+        if current_xp < bet:
+            return {"ok": False, "error": "Dafür reichen deine XP nicht.",
+                    "xp": current_xp, "level": calculate_level(current_xp)}
+
+        result = slots.evaluate(slots.spin_reels(), bet)
+
+        level_before = calculate_level(current_xp)
+        new_xp = max(0, current_xp + result["net"])
+        new_level = calculate_level(new_xp)
+
+        cursor.execute(
+            "UPDATE users SET xp = %s, level = %s WHERE id = %s",
+            (new_xp, new_level, user_id)
+        )
+        cursor.execute(
+            """
+            INSERT INTO slot_spins (user_id, bet, payout, symbols, xp_after)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_id, bet, result["payout"], ",".join(result["symbols"]), new_xp)
+        )
+
+        result.update({
+            "ok": True,
+            "xp": new_xp,
+            "level": new_level,
+            "level_before": level_before,
+            "level_delta": new_level - level_before,
+        })
+        return result
+
+
+def get_slot_history(user_id: int, limit: int = 10):
+    """Die letzten Spins eines Nutzers, neueste zuerst."""
+    limit = max(1, min(int(limit), 50))
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT bet, payout, symbols, xp_after, created_at
+            FROM slot_spins
+            WHERE user_id = %s
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s
+            """,
+            (user_id, limit)
+        )
+        return cursor.fetchall()
+
+
+def get_slot_stats(user_id: int):
+    """Gesamtbilanz eines Nutzers am Automaten (Spins, Einsatz, Auszahlung)."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*)                        AS spins,
+                   COALESCE(SUM(bet), 0)           AS wagered,
+                   COALESCE(SUM(payout), 0)        AS won
+            FROM slot_spins
+            WHERE user_id = %s
+            """,
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        return {
+            "spins": int(row["spins"]),
+            "wagered": int(row["wagered"]),
+            "won": int(row["won"]),
+            "net": int(row["won"]) - int(row["wagered"]),
+        }

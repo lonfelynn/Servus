@@ -141,9 +141,16 @@
   border-bottom-right-radius: 7px;
 }
 
-/* Kommt Söder von oben, hängt die Blase unter ihm – sonst läge sie außerhalb
-   des Bildschirms. Der Zipfel wandert entsprechend an die Oberkante. */
-.soeder-mascot.from-top .soeder-speech { bottom: auto; top: 88%; }
+/* Die Blase folgt dem gekippten Foto: sie sitzt immer am Kopfende, also der
+   Fußlinie gegenüber. Weil das Bild um die Fußlinie dreht, liegt das Kopfende
+   je nach Kante --w vom Drehpunkt entfernt – daher überall dieselbe Rechnung.
+
+   Von oben: das Foto hängt unterhalb der Hülle, die Blase also noch tiefer.
+   Der Zipfel wandert dafür an die Oberkante der Blase. */
+.soeder-mascot.from-top .soeder-speech {
+  bottom: auto;
+  top: calc(var(--w) * 1.88);
+}
 .soeder-mascot.from-top .soeder-speech::after {
   bottom: auto;
   top: -8px;
@@ -153,12 +160,28 @@
   border-top-left-radius: 7px;
 }
 
-/* An den Seiten klebt das Foto am Bildschirmrand; eine mittig zentrierte Blase
-   würde hinausragen. Deshalb bündig mit der jeweiligen Fotokante ausrichten. */
-.soeder-mascot.from-left .soeder-speech { left: 0; transform: none; }
-.soeder-mascot.from-left .soeder-speech::after { left: 28%; transform: rotate(45deg); }
-.soeder-mascot.from-right .soeder-speech { left: auto; right: 0; transform: none; }
-.soeder-mascot.from-right .soeder-speech::after { left: auto; right: 28%; transform: rotate(45deg); }
+/* An den Seiten liegt Söder waagerecht; die Blase schwebt über dem liegenden
+   Körper. Sie wird NICHT über ihm zentriert, sondern bündig an den Bildschirm-
+   rand gesetzt: lange Zitate werden bis 300px breit und würden sonst über die
+   Kante hinauslaufen. Nur der Zipfel wandert zurück über die Körpermitte. */
+.soeder-mascot.from-left .soeder-speech,
+.soeder-mascot.from-right .soeder-speech {
+  bottom: calc(var(--w) / 2 + 10px);
+  transform: none;
+}
+.soeder-mascot.from-left .soeder-speech { left: calc(var(--w) / 2 + 10px); }
+.soeder-mascot.from-left .soeder-speech::after {
+  left: calc(var(--w) / 2 - 10px);
+}
+.soeder-mascot.from-right .soeder-speech {
+  left: auto;
+  right: calc(var(--w) / 2 + 10px);
+}
+.soeder-mascot.from-right .soeder-speech::after {
+  left: auto;
+  right: calc(var(--w) / 2 - 10px);
+  transform: translateX(50%) rotate(45deg);
+}
 
 @keyframes soeder-pop {
   0%   { opacity: 0; transform: translate(var(--fx, 0), var(--fy, 0)) scale(0.6); }
@@ -168,9 +191,11 @@
   0%   { opacity: 1; transform: translate(0, 0) scale(1); }
   100% { opacity: 0; transform: translate(var(--fx, 0), var(--fy, 0)) scale(0.7); }
 }
+/* Wackeln um die Grundkippung herum: translateY läuft im gedrehten System,
+   Söder wippt also immer von „seiner" Kante weg statt stur nach oben. */
 @keyframes soeder-bob {
-  0%, 100% { transform: rotate(-2deg) translateY(0); }
-  50%      { transform: rotate(2deg)  translateY(-6px); }
+  0%, 100% { transform: rotate(calc(var(--tilt, 0deg) - 2deg)) translateY(0); }
+  50%      { transform: rotate(calc(var(--tilt, 0deg) + 2deg)) translateY(-6px); }
 }
 
 /* Nutzer, die reduzierte Bewegung bevorzugen: keine Dauer-Animationen. */

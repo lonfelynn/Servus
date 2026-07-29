@@ -92,11 +92,22 @@ def get_connection():
 
 
 # ── Migrations ──────────────────────────────────────────────
+def _migration_order(path):
+    """Sort key for migration files: 2.sql must run before 10.sql.
+
+    Files whose name does not start with a number keep working — they sort
+    after the numbered ones, by name.
+    """
+    name = os.path.basename(path)
+    number = name.split(".", 1)[0]
+    return (0, int(number), name) if number.isdigit() else (1, 0, name)
+
+
 def run_migrations():
     """
-    Applies every *.sql file in the sql/ folder exactly once, ordered by
-    filename. Applied files are recorded in the schema_migrations table,
-    so re-running is safe and only new files get executed.
+    Applies every *.sql file in the sql/ folder exactly once, ordered by the
+    number in the filename. Applied files are recorded in the schema_migrations
+    table, so re-running is safe and only new files get executed.
     """
     pool = get_pool()
     connection = pool.getconn()
@@ -113,7 +124,10 @@ def run_migrations():
         cursor.execute("SELECT filename FROM schema_migrations")
         applied = {row["filename"] for row in cursor.fetchall()}
 
-        files = sorted(glob.glob(os.path.join(MIGRATIONS_DIR, "*.sql")))
+        # Numerically by the filename prefix, not alphabetically: plain sorting
+        # would put 10.sql before 2.sql and blow up on a fresh database.
+        files = sorted(glob.glob(os.path.join(MIGRATIONS_DIR, "*.sql")),
+                       key=_migration_order)
         for path in files:
             name = os.path.basename(path)
             if name in applied:
