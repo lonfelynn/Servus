@@ -8,6 +8,7 @@ from .helpers import login_required, chat_message_to_dict, content_too_long
 from .constants import BASE_DIR, MESSAGE_MAX_LEN
 from extensions import socketio
 from models import (
+    add_xp,
     add_chat_member,
     are_friends,
     delete_chat_message,
@@ -91,6 +92,11 @@ def api_create_chat():
 
     name = (data.get("name") or "").strip() or None
     chat_id = find_or_create_chat(member_ids, created_by=me, name=name)
+
+    if len(member_ids) == 2:
+        add_xp(me, 50)      
+    else:
+        add_xp(me, 75)      
 
     # Make sure every member's live session joins the room and refreshes.
     for uid in member_ids:
