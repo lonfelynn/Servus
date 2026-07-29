@@ -91,12 +91,7 @@ def api_create_chat():
         return jsonify({"ok": False, "error": "Du kannst nur Freunde zu einer Gruppe hinzufügen."}), 403
 
     name = (data.get("name") or "").strip() or None
-    chat_id = find_or_create_chat(member_ids, created_by=me, name=name)
-
-    if len(member_ids) == 2:
-        add_xp(me, 50)      
-    else:
-        add_xp(me, 75)      
+    chat_id = find_or_create_chat(member_ids, created_by=me, name=name)     
 
     # Make sure every member's live session joins the room and refreshes.
     for uid in member_ids:
